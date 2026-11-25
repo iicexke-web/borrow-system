@@ -1,0 +1,1273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Borrow &amp; Return System</title>
+<style>
+/* ==========================================================================
+   DESIGN TOKENS
+   ========================================================================== */
+:root{
+  --bg:#f4f6fb;
+  --card:#ffffff;
+  --ink:#1d2333;
+  --muted:#6d7589;
+  --line:#e6e9f1;
+  --brand:#4f46e5;
+  --brand-2:#7c3aed;
+  --brand-soft:#eef2ff;
+  --ok:#15803d;      --ok-soft:#dcfce7;
+  --warn:#b45309;    --warn-soft:#fef3c7;
+  --bad:#b91c1c;     --bad-soft:#fee2e2;
+  --info:#1d4ed8;    --info-soft:#dbeafe;
+  --r:14px;
+  --shadow:0 1px 2px rgba(16,24,40,.04), 0 10px 28px rgba(16,24,40,.05);
+  --font:Arial,Helvetica,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font-family:inherit;font-size:inherit}
+button{cursor:pointer}
+a{color:inherit;text-decoration:none}
+
+/* ==========================================================================
+   LAYOUT
+   ========================================================================== */
+.app{display:flex;min-height:100vh}
+.sidebar{
+  width:236px;flex:0 0 236px;position:fixed;inset:0 auto 0 0;z-index:30;
+  background:var(--card);border-right:1px solid var(--line);
+  padding:22px 14px;display:flex;flex-direction:column;gap:6px;
+}
+.brand{display:flex;align-items:center;gap:11px;padding:0 10px 20px}
+.brand-mark{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;background:linear-gradient(135deg,var(--brand),var(--brand-2));color:#fff;box-shadow:0 6px 16px rgba(79,70,229,.28)}
+.brand-mark svg{width:21px;height:21px}
+.brand-name{font-size:15px;font-weight:700;letter-spacing:-.2px}
+.brand-sub{font-size:11px;color:var(--muted)}
+.nav-label{font-size:10px;font-weight:700;color:#9aa1b1;letter-spacing:1px;padding:12px 12px 6px;text-transform:uppercase}
+.nav-link{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:10px;color:#545c70;font-weight:600;transition:.16s}
+.nav-link:hover{background:#f6f7fb;color:var(--ink)}
+.nav-link.active{background:var(--brand-soft);color:var(--brand)}
+.nav-link svg{width:18px;height:18px;flex:none}
+.nav-link .pill{margin-left:auto;background:#eef0f5;color:#6d7589;border-radius:99px;font-size:10px;padding:1px 7px;font-weight:700}
+.nav-link.active .pill{background:#dfe4ff;color:var(--brand)}
+.side-foot{margin-top:auto;padding:14px 12px 0;border-top:1px solid var(--line);font-size:11px;color:var(--muted)}
+
+.main-wrap{margin-left:236px;flex:1;min-width:0}
+.topbar{
+  height:68px;position:sticky;top:0;z-index:20;padding:0 28px;
+  display:flex;align-items:center;justify-content:space-between;gap:14px;
+  background:rgba(255,255,255,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);
+}
+.top-title{font-size:15px;font-weight:700;white-space:nowrap}
+.top-actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap;justify-content:flex-end}
+.field-compact{display:flex;align-items:center;gap:7px;background:#f6f7fb;border:1px solid var(--line);border-radius:10px;padding:5px 9px}
+.field-compact label{font-size:11px;color:var(--muted);white-space:nowrap}
+.field-compact input,.field-compact select{border:0;background:transparent;outline:0;color:var(--ink);font-weight:600;max-width:150px}
+.field-compact input{width:130px}
+main#view{padding:26px 28px 70px;max-width:1440px;margin:0 auto}
+.mobile-nav{display:none}
+
+/* ==========================================================================
+   SHARED COMPONENTS
+   ========================================================================== */
+.page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin-bottom:20px;flex-wrap:wrap}
+.page-title{font-size:22px;font-weight:750;letter-spacing:-.4px;margin:0}
+.page-desc{color:var(--muted);font-size:13px;margin:4px 0 0}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
+.pad{padding:20px}
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:17px 20px;border-bottom:1px solid var(--line)}
+.card-title{font-size:14px;font-weight:700;margin:0}
+.card-sub{font-size:11px;color:var(--muted);margin:2px 0 0}
+.muted{color:var(--muted)}
+.small{font-size:12px}
+.tiny{font-size:11px}
+.strong{font-weight:700}
+.row{display:flex;align-items:center;gap:10px}
+.between{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.wrap{flex-wrap:wrap}
+.stack{display:flex;flex-direction:column;gap:12px}
+.empty{padding:34px 20px;text-align:center;color:var(--muted)}
+.empty svg{width:32px;height:32px;opacity:.4;margin-bottom:8px}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:9px;padding:8px 13px;font-weight:600;transition:.15s;white-space:nowrap}
+.btn:hover{background:#f7f8fc;border-color:#d6dae5}
+.btn.primary{background:var(--brand);border-color:var(--brand);color:#fff;box-shadow:0 4px 12px rgba(79,70,229,.2)}
+.btn.primary:hover{background:#4338ca}
+.btn.ok{background:var(--ok);border-color:var(--ok);color:#fff}
+.btn.ok:hover{background:#166534}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--muted)}
+.btn.ghost:hover{background:#f2f4f9;color:var(--ink)}
+.btn.danger{color:var(--bad);border-color:#f3cccc;background:#fff5f5}
+.btn.danger:hover{background:#fee2e2}
+.btn.sm{padding:5px 10px;font-size:12px;border-radius:8px}
+.btn.icon{padding:7px;border-radius:8px}
+.btn svg{width:15px;height:15px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+
+.badge{display:inline-flex;align-items:center;gap:5px;border-radius:99px;padding:3px 9px;font-size:11px;font-weight:700;white-space:nowrap}
+.badge::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.badge.available{background:var(--ok-soft);color:var(--ok)}
+.badge.borrowed{background:var(--info-soft);color:var(--info)}
+.badge.unavailable{background:#f1f3f7;color:#6b7280}
+.badge.active{background:var(--info-soft);color:var(--info)}
+.badge.overdue{background:var(--bad-soft);color:var(--bad)}
+.badge.returned{background:var(--ok-soft);color:var(--ok)}
+.badge.soon{background:var(--warn-soft);color:var(--warn)}
+.badge.scheduled{background:var(--brand-soft);color:var(--brand)}
+
+.input,select.input,textarea.input{
+  width:100%;border:1px solid var(--line);border-radius:9px;background:#fff;
+  padding:8px 11px;outline:0;transition:.15s;color:var(--ink)
+}
+.input:focus{border-color:#a5b4fc;box-shadow:0 0 0 3px rgba(79,70,229,.1)}
+textarea.input{min-height:74px;resize:vertical}
+label.lbl{display:block;font-size:12px;font-weight:600;color:#4b5563;margin-bottom:6px}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.form-grid .full{grid-column:1/-1}
+.modal-foot{display:flex;justify-content:flex-end;gap:9px;padding:16px 22px;border-top:1px solid var(--line);margin-top:6px}
+
+/* ==========================================================================
+   DASHBOARD
+   ========================================================================== */
+.kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:18px}
+.kpi{padding:18px 19px;position:relative;overflow:hidden}
+.kpi-top{display:flex;align-items:center;justify-content:space-between}
+.kpi-ico{width:36px;height:36px;border-radius:10px;display:grid;place-items:center}
+.kpi-ico svg{width:18px;height:18px}
+.kpi-num{font-size:29px;font-weight:750;letter-spacing:-1px;margin-top:12px;line-height:1.1}
+.kpi-label{font-size:12px;color:var(--muted);margin-top:3px}
+.kpi-foot{font-size:11px;color:var(--muted);margin-top:9px;padding-top:9px;border-top:1px dashed var(--line)}
+.kpi.a .kpi-ico{background:var(--brand-soft);color:var(--brand)}
+.kpi.b .kpi-ico{background:var(--info-soft);color:var(--info)}
+.kpi.c .kpi-ico{background:var(--ok-soft);color:var(--ok)}
+.kpi.d .kpi-ico{background:var(--bad-soft);color:var(--bad)}
+.dash-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:16px;margin-bottom:16px}
+.bar-row{display:grid;grid-template-columns:130px 1fr 34px;gap:12px;align-items:center;padding:7px 0}
+.bar-name{font-size:12px;color:#4b5563;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar-track{height:9px;background:#eef0f6;border-radius:99px;overflow:hidden}
+.bar-fill{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--brand),var(--brand-2))}
+.bar-val{font-size:12px;font-weight:700;text-align:right}
+.mini-stat{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px dashed var(--line)}
+.mini-stat:last-child{border:0}
+.alert-item{display:flex;align-items:center;gap:12px;padding:13px 20px;border-bottom:1px solid var(--line)}
+.alert-item:last-child{border-bottom:0}
+.alert-dot{width:9px;height:9px;border-radius:50%;flex:none}
+.alert-main{flex:1;min-width:0}
+.alert-name{font-weight:700;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.alert-meta{font-size:11px;color:var(--muted);margin-top:2px}
+.alert-actions{display:flex;gap:6px;flex:none}
+
+/* ==========================================================================
+   ITEMS / TABLES
+   ========================================================================== */
+.toolbar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:16px}
+.search-box{position:relative;flex:1;min-width:200px}
+.search-box svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:#9aa1b1}
+.search-box input{padding-left:34px}
+.toolbar select.input{width:auto;min-width:140px}
+.items-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.pager{display:flex;align-items:center;justify-content:center;gap:7px;flex-wrap:wrap;margin-top:20px}
+.pager .btn{min-width:34px;padding:6px 10px}
+.pager .current{background:var(--brand-soft);border-color:#dfe4ff;color:var(--brand)}
+.pager .info{font-size:12px;color:var(--muted);margin:0 6px}
+.item-card{padding:17px;display:flex;flex-direction:column;gap:12px;transition:.18s}
+.item-card:hover{transform:translateY(-2px);box-shadow:0 12px 30px rgba(16,24,40,.09);border-color:#d8dce8}
+.item-ico{width:42px;height:42px;border-radius:11px;background:var(--brand-soft);color:var(--brand);display:grid;place-items:center;flex:none}
+.item-ico svg{width:21px;height:21px}
+.item-name{font-weight:700;font-size:14px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.item-cat{font-size:11px;color:var(--muted);margin-top:2px}
+.item-qty{font-size:12px;color:#4b5563}
+.item-qty b{color:var(--ink)}
+.item-foot{display:flex;gap:7px;margin-top:auto;padding-top:12px;border-top:1px solid var(--line)}
+.item-foot .btn{flex:1}
+
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:660px}
+th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#8b93a4;font-weight:700;padding:12px 16px;border-bottom:1px solid var(--line);background:#fafbfe;white-space:nowrap}
+td{padding:12px 16px;border-bottom:1px solid #f0f2f7;font-size:13px;vertical-align:middle}
+tr:last-child td{border-bottom:0}
+tbody tr:hover{background:#fafbff}
+.tabs{display:inline-flex;background:#eef0f6;border-radius:10px;padding:3px;gap:2px}
+.tabs button{border:0;background:transparent;padding:7px 14px;border-radius:8px;font-weight:600;font-size:12px;color:var(--muted)}
+.tabs button.active{background:#fff;color:var(--brand);box-shadow:0 1px 4px rgba(16,24,40,.1)}
+
+/* STORAGE LAYOUT */
+.sheet-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.sheet-tab{display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:#fff;border-radius:10px;padding:9px 13px;text-align:left;transition:.15s}
+.sheet-tab:hover{border-color:#c7cdda;background:#fafbff}
+.sheet-tab.active{border-color:var(--brand);background:var(--brand-soft)}
+.sheet-tab .sheet-no{width:22px;height:22px;border-radius:7px;display:grid;place-items:center;background:#eef0f6;color:var(--muted);font-size:11px;font-weight:700;flex:none}
+.sheet-tab.active .sheet-no{background:#fff;color:var(--brand)}
+.sheet-tab .sheet-name{font-size:12px;font-weight:700;line-height:1.2}
+.sheet-tab .sheet-meta{font-size:10px;color:var(--muted);margin-top:2px}
+.layout-location{margin-bottom:14px;overflow:hidden}
+.layout-loc-head{display:flex;align-items:center;gap:10px;padding:13px 17px;border-bottom:1px solid var(--line);background:#fafbfe}
+.loc-pin{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:var(--brand-soft);color:var(--brand);flex:none}
+.loc-pin svg{width:16px;height:16px}
+.layout-loc-name{font-weight:700;font-size:13px}
+.layout-loc-meta{font-size:11px;color:var(--muted);margin-top:1px}
+.layout-entries{display:grid;grid-template-columns:repeat(auto-fill,minmax(225px,1fr));gap:10px;padding:15px}
+.layout-entry{border:1px solid var(--line);border-radius:10px;padding:11px 12px;background:#fff;transition:.15s}
+.layout-entry:hover{border-color:#cfd5e3;background:#fcfcff}
+.layout-part{font-size:10px;font-weight:700;color:var(--brand);letter-spacing:.2px;text-transform:uppercase}
+.layout-desc{font-size:12px;font-weight:600;line-height:1.35;margin-top:4px}
+.layout-meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+.layout-chip{font-size:10px;background:#f1f3f8;border-radius:6px;padding:2px 7px;color:#596175;font-weight:600}
+.layout-chip.serial{background:var(--info-soft);color:var(--info)}
+.layout-chip.match{background:var(--ok-soft);color:var(--ok)}
+.layout-chip.noQty{background:var(--warn-soft);color:var(--warn)}
+
+/* ==========================================================================
+   MODAL / TOAST
+   ========================================================================== */
+.backdrop{position:fixed;inset:0;z-index:100;background:rgba(15,23,42,.48);display:flex;align-items:center;justify-content:center;padding:16px;animation:fade .15s ease}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.modal{background:#fff;border-radius:16px;width:min(540px,100%);max-height:min(90vh,820px);display:flex;flex-direction:column;box-shadow:0 24px 70px rgba(15,23,42,.25);animation:rise .18s ease}
+@keyframes rise{from{transform:translateY(12px);opacity:.6}to{transform:none;opacity:1}}
+.modal-head{padding:19px 22px;border-bottom:1px solid var(--line)}
+.modal-title{font-size:16px;font-weight:750;margin:0}
+.modal-body{padding:20px 22px;overflow:auto}
+#toast-root{position:fixed;top:18px;right:18px;z-index:200;display:flex;flex-direction:column;gap:9px;max-width:calc(100vw - 36px)}
+.toast{background:#1d2333;color:#fff;border-radius:10px;padding:11px 15px;font-size:13px;font-weight:600;box-shadow:0 10px 30px rgba(15,23,42,.25);animation:slide .2s ease;display:flex;align-items:center;gap:9px}
+.toast.ok{background:#166534}.toast.bad{background:#b91c1c}.toast.warn{background:#b45309}
+@keyframes slide{from{transform:translateX(20px);opacity:0}to{transform:none;opacity:1}}
+.detail-list{display:grid;grid-template-columns:130px 1fr;gap:9px 12px;font-size:13px}
+.detail-list dt{color:var(--muted)}
+.detail-list dd{margin:0;font-weight:600;word-break:break-word}
+.detail-list dd a{color:var(--brand);text-decoration:underline}
+
+/* ==========================================================================
+   RESPONSIVE
+   ========================================================================== */
+@media (max-width:900px){
+  .items-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .layout-entries{grid-template-columns:repeat(auto-fill,minmax(190px,1fr))}
+}
+@media (max-width:1080px){
+  .kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .dash-grid{grid-template-columns:1fr}
+}
+@media (max-width:860px){
+  .sidebar{display:none}
+  .main-wrap{margin-left:0}
+  .topbar{height:auto;min-height:60px;padding:10px 16px;flex-wrap:wrap}
+  .top-title{font-size:14px}
+  main#view{padding:18px 16px 96px}
+  .mobile-nav{
+    display:flex;position:fixed;bottom:0;left:0;right:0;z-index:40;
+    background:#fff;border-top:1px solid var(--line);padding:7px 6px calc(7px + env(safe-area-inset-bottom));
+    box-shadow:0 -6px 20px rgba(16,24,40,.06)
+  }
+  .mobile-nav .nav-link{flex:1;flex-direction:column;gap:3px;padding:7px 2px;font-size:10px;border-radius:9px;text-align:center}
+  .mobile-nav .nav-link svg{width:19px;height:19px}
+  .mobile-nav .nav-link .pill{display:none}
+  .field-compact input{width:100px}
+}
+@media (max-width:560px){
+  .items-grid{grid-template-columns:1fr}
+  .layout-entries{grid-template-columns:1fr}
+  .kpi-grid{gap:10px}
+  .kpi{padding:14px}
+  .kpi-num{font-size:23px}
+  .form-grid{grid-template-columns:1fr}
+  .form-grid .full{grid-column:auto}
+  .bar-row{grid-template-columns:96px 1fr 28px;gap:8px}
+  .alert-item{flex-wrap:wrap}
+  .alert-actions{width:100%}
+  .alert-actions .btn{flex:1}
+  .page-title{font-size:19px}
+}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-5 9 5-9 5-9-5z"/><path d="M3 9v6l9 5 9-5V9"/><path d="M12 14v6"/></svg></div>
+      <div><div class="brand-name">Borrow &amp; Return</div><div class="brand-sub">Asset Lending Dashboard</div></div>
+    </div>
+    <div class="nav-label">Main menu</div>
+    <a href="#dashboard" class="nav-link" data-nav="dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Dashboard</a>
+    <a href="#items" class="nav-link" data-nav="items"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 9l9-5 9 5-9 5-9-5z"/><path d="M3 9v6l9 5 9-5V9"/></svg>Borrow &amp; Return <span class="pill" id="nav-item-count"></span></a>
+    <a href="#inventory" class="nav-link" data-nav="inventory"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h10"/><circle cx="19" cy="17" r="2"/></svg>Inventory &amp; History</a>
+    <a href="#layout" class="nav-link" data-nav="layout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5.5 7-12a7 7 0 10-14 0c0 6.5 7 12 7 12z"/><circle cx="12" cy="9" r="2.5"/></svg>Storage Layout</a>
+    <div class="side-foot">Data loaded from the RF equipment workbook.<br />Stored locally in this browser.</div>
+  </aside>
+
+  <div class="main-wrap">
+    <header class="topbar">
+      <div class="top-title" id="page-title">Dashboard</div>
+      <div class="top-actions">
+        <div class="field-compact"><label for="user-name">User</label><input id="user-name" type="text" placeholder="Your name" /></div>
+        <div class="field-compact"><label for="role-select">Role</label><select id="role-select"><option value="borrower">Borrower</option><option value="admin">Admin</option></select></div>
+        <button class="btn sm" data-action="import-csv" title="Import data from a CSV file">Import CSV</button>
+      </div>
+    </header>
+    <main id="view"></main>
+  </div>
+</div>
+
+<nav class="mobile-nav">
+  <a href="#dashboard" class="nav-link" data-nav="dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Dashboard</a>
+  <a href="#items" class="nav-link" data-nav="items"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 9l9-5 9 5-9 5-9-5z"/><path d="M3 9v6l9 5 9-5V9"/></svg>Borrow / Return</a>
+  <a href="#inventory" class="nav-link" data-nav="inventory"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h10"/><circle cx="19" cy="17" r="2"/></svg>Inventory</a>
+  <a href="#layout" class="nav-link" data-nav="layout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5.5 7-12a7 7 0 10-14 0c0 6.5 7 12 7 12z"/><circle cx="12" cy="9" r="2.5"/></svg>Layout</a>
+</nav>
+
+<div id="modal-root"></div>
+<div id="toast-root"></div>
+<input type="file" id="csv-input" accept=".csv,text/csv,.txt" hidden />
+
+<script>
+/* ==========================================================================
+   1. CONFIG + UTILITIES
+   ========================================================================== */
+'use strict';
+
+/* Inventory extracted from: Production - RF equipment - Gust (2).xlsx
+   Sheet: "RF Equipment - Master List" */
+const EXCEL_EQUIPMENT = [{"id":"eq2","name":"N Jack Female to N Jack Female Adapte","sku":"R03-N01-10009","category":"Accessory","description":"N Jack Female to N Jack Female Adapter Straight 4 Hole Flange\n50 Ohm \u0026 75ohm","quantity":1,"available":1,"location":"RF connector box no. 1\nCupboard S1-1","conditions":"Medium","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://www.metabee.com/product-detail/n-jack-female-to-n-jack-female-adapter-straight-4-hole-flange-r03-n01-10009_4394?network=g\u0026campaignid=21845410302\u0026adgroupid=170109850232\u0026gad_source=1\u0026gad_campaignid=21845410302\u0026gbraid=0AAAAAo-lWNVu6JSPiIhlX7WCWACb3ACVA\u0026gclid=CjwKCAjwwfnUBhAtEiwAfQpAYh1PUiMfXFwZ8s7Mi1Cw-oPZLYQjWLcA1snjjFaWm0sPHZsYE2Q6ORoC4-YQAvD_BwE","enabled":true},{"id":"eq3","name":"N-Type Male to N-Type Female Adapter","sku":"172126","category":"Accessory","description":"N-Type Jack to N-Type Plug Adapter 50 Ohm Right Angle\nFrequency (Max GHz) 11GHz","quantity":3,"available":3,"location":"RF connector box no. 1\nCupboard S1-1","conditions":"Medium","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://www.amphenolrf.com/en-us/part/172126/7107/","enabled":true},{"id":"eq4","name":"RF Adapter","sku":"SM4221","category":"Accessory","description":"COAX ADAPT SMA TO N 50Ohm Frequency (Max 18 GHz)","quantity":1,"available":1,"location":"RF connector box no. 2\nCupboard S1-1","conditions":"Medium","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://www.mouser.com/en/ProductDetail/Fairview-Microwave/SM4221?qs=3GbUB62Nf7c7bkEBCYnnCQ%3D%3D\u0026srsltid=AfmBOooeK5PiX6OwwUR-_tlWhVDcKD4ucmzMiJnPjZ5Gh-Nuj37A0SKl","enabled":true},{"id":"eq5","name":"RF Adapter","sku":"AD-N1N1","category":"Accessory","description":"RF Adapter, N Male to N Male\n50Ohm Frequency (Max 6 GHz)","quantity":1,"available":1,"location":"RF connector box no. 2\nCupboard S1-1","conditions":"Medium","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://powertec.com.au/rf-adapter-n-male-to-n-male/","enabled":true},{"id":"eq6","name":"RF Adapter","sku":"4912-NA-JJ-18G-ND","category":"Accessory","description":"N female to N female adapter 50Ohm Frequency (Max 18 GHz)","quantity":1,"available":1,"location":"RF connector box no. 2\nCupboard S1-1","conditions":"Medium","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://www.digikey.com/en/products/detail/tyclon/NA-JJ-18G/26802187","enabled":true},{"id":"eq7","name":"RF Adapter","sku":"AXA-NFNF","category":"Accessory","description":"Coaxial Adapter, Type N-Female / Female 50 Ohm \nFrequency, (Max 11 GHz)","quantity":1,"available":1,"location":"RF connector box no. 2\nCupboard S1-1","conditions":"Medium","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://www.l-com.com/coaxial-coaxial-adapter-type-n-female-female?srsltid=AfmBOopJlxM0EaCBqavZE_HKXMRlZlzfG2KeNkZ5AoDsyNqUEwJJ3WaB","enabled":true},{"id":"eq8","name":"RF Adapter","sku":"AD-N2SA1","category":"Accessory","description":"RF Adapter, N Female to SMA Male (Frequencies up to 6 GHz)","quantity":1,"available":1,"location":"RF connector box no. 2\nCupboard S1-1","conditions":"Medium","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://powertec.com.au/rf-adapter-n-female-to-sma-male/","enabled":true},{"id":"eq9","name":"RF Adapter","sku":"AD-N2SA2","category":"Accessory","description":"RF Adapter, N Female to SMA Female\nfrequency range to 6 GHz.","quantity":2,"available":2,"location":"RF connector box no. 2\nCupboard S1-1","conditions":"Medium","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://powertec.com.au/rf-adapter-n-female-to-sma-female/","enabled":true},{"id":"eq10","name":"RF Adapter","sku":"PCM-SHM-0043","category":"Accessory","description":"RF Adapters - Sealed N Female to N Female Bulkhead Mount Adapter 50Ohm \u0026 Frequency, (Max 11 GHz)","quantity":2,"available":2,"location":"RF connector box no. 2\nCupboard S1-1","conditions":"Medium","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://www.pcm-cable.com/rf-jumper-cable/n-type-cable-assemblies/bulkhead-mount-n-female-to-n-female-adapter.html","enabled":true},{"id":"eq11","name":"RF Adapter","sku":"MAJ-NCJ-SBH-05","category":"Accessory","description":"SMA Female to N Type Female Bulkhead Waterproof Adapter 50 ohm \u0026 Frequency, (Max 11 GHz)","quantity":2,"available":2,"location":"RF connector box no. 2\nCupboard S1-1","conditions":"Medium","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://zomwave.com/sma-female-to-n-type-female-bulkhead-waterproof-adapter-6ghz/","enabled":true},{"id":"eq12","name":"RF Adapter","sku":"AXA-NFRSP","category":"Accessory","description":"Coaxial Adapter, N-Female / RP-SMA Plug\n50 Ohm \u0026 Frequency, (Max 11 GHz)","quantity":2,"available":2,"location":"RF connector box no. 2\nCupboard S1-1","conditions":"Medium","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://www.l-com.com/coaxial-coaxial-adapter-n-female-rp-sma-plug","enabled":true},{"id":"eq13","name":"RF Adapter","sku":"ADP-NM-BNCF","category":"Accessory","description":"RF / Coaxial Adaptor, RF Coaxial, Straight Adapter, N, Plug, BNC, Receptacle 50 Ohm \u0026 Frequency Range DC-11GHz","quantity":1,"available":1,"location":"RF connector box no. 2\nCupboard S1-1","conditions":"Medium","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://uk.farnell.com/rf-solutions/adp-nm-bncf/adaptor-bnc-socket-to-n-plug/dp/3389798","enabled":true},{"id":"eq14","name":"RF Adapter","sku":"N-043-1DGN","category":"Accessory","description":"N Male 50 Ohm \u0026 Frequency Range DC-11GHz Terminator","quantity":1,"available":1,"location":"RF connector box no. 2\nCupboard S1-1","conditions":"Medium","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://www.ebay.co.uk/itm/332582262070","enabled":true},{"id":"eq15","name":"SMA Adapter","sku":"ADP-SMAF-MMCXF","category":"Accessory","description":"MMCX female jack to SMA male plug straight Connector Adapter 50ohm 50 ohm Coax","quantity":2,"available":2,"location":"RF connector box no. 3\nCupboard S1-1","conditions":"Medium","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://th.element14.com/rf-solutions/adp-smaf-mmcxf/adaptor-mmcx-female-to-sma-female/dp/4853044?CMP=KNC-GTH-GEN-SHOPPING-4853044\u0026CMP=KNC-GTH-PMAX-DSA-1\u0026mckv=_dc|pcrid||pkw||pmt||slid||product|4853044|pgrid||ptaid||\u0026gad_source=1\u0026gad_campaignid=20100912410\u0026gbraid=0AAAAAD8yeHnLXSmfus5V-UJqySXwcLXwJ\u0026gclid=CjwKCAjwwfnUBhAtEiwAfQpAYp8zKygJwx0SAgsHFnCoF5ttlNTilxooZEJiAL_SOGnL8vwNtrDGqhoCHlEQAvD_BwE","enabled":true},{"id":"eq16","name":"SMA Adapter","sku":"21010-SMA","category":"Accessory","description":"SMA Coaxial Termination Open","quantity":2,"available":2,"location":"RF connector box no. 3\nCupboard S1-1","conditions":"Medium","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://www.wimo.com/en/21010-open?srsltid=AfmBOopi0AE7nKjmZjtYm-CxsuVzWFo_v86rsn-2z-oVHSbhpW33OgWP","enabled":true},{"id":"eq17","name":"SMA Adapter","sku":"SMA Fixed Dummy Load Termination","category":"Accessory","description":"High-Performance RF SMA 50 Ohm \u0026 Frequency (Max 5.8 GHz) Coaxial Dummy Load Male","quantity":10,"available":10,"location":"RF connector box no. 3\nCupboard S1-1","conditions":"Medium","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://www.aliexpress.us/item/3256805478730659.html?dp=CjwKCAjwwfnUBhAtEiwAfQpAYgVgZVBTLcaPhfZ6Lrz_1I18TfGdLSzfx4qFAzPqIrLS5inY-I4JfRoCPCIQAvD_BwE\u0026af=646624\u0026cv=47843\u0026mall_affr=pr3\u0026utm_source=admitad\u0026utm_medium=cpa\u0026utm_campaign=646624\u0026utm_content=47843\u0026gad_source=1\u0026gad_campaignid=16652442405\u0026gbraid=0AAAAAoey1Fwciy3yYybzZBap7ehMrtFdZ\u0026gclid=CjwKCAjwwfnUBhAtEiwAfQpAYgVgZVBTLcaPhfZ6Lrz_1I18TfGdLSzfx4qFAzPqIrLS5inY-I4JfRoCPCIQAvD_BwE\u0026gatewayAdapt=glo2usa4itemAdapt","enabled":true},{"id":"eq18","name":"Fliter","sku":"NMRF FBP-868S","category":"Accessory","description":"SAW Bandpass Filter (RF BPF) for 868 MHz","quantity":1,"available":1,"location":"RF connector box no. 3\nCupboard S1-1","conditions":"Hight Risk","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://www.aliexpress.us/item/2251832811410815.html?gatewayAdapt=glo2usa4itemAdapt","enabled":true},{"id":"eq19","name":"Fliter","sku":"NMRF FBP-1590S","category":"Accessory","description":"SAW Bandpass Filter (RF BPF) 50 Ohms \u0026  Frequency (Max 1585.5 MHz / 60 MHz )","quantity":1,"available":1,"location":"RF connector box no. 3\nCupboard S1-1","conditions":"Hight Risk","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://www.ebay.com/itm/386603640101","enabled":true},{"id":"eq20","name":"SMA Adapter","sku":"ADAPT/SMAM/SMAM","category":"Accessory","description":"Siretta Straight SMA Connector Male Male","quantity":3,"available":3,"location":"RF connector box no. 3\nCupboard S1-1","conditions":"Medium","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://th.rs-online.com/web/p/coaxial-adapters/0696902?cm_mmc=TH-PLA-DS3A-_-google-_-PLA_TH_TH_PMAX_ALL_Catch+All_20260714-_--_-\u0026matchtype=\u0026\u0026campaignid=24032707907\u0026gclsrc=aw.ds\u0026gad_source=1\u0026gad_campaignid=24037174747\u0026gbraid=0AAAAADkeWNOIRMHlVk0vV4FNvqZIr1wLu\u0026gclid=CjwKCAjwwfnUBhAtEiwAfQpAYn8_b6DRiOtLKs9B4uEKAKslIEwzSQSgyv9UieTT-ocCunZBepZtqBoCoaoQAvD_BwE","enabled":true},{"id":"eq21","name":"SMA Adapter","sku":"SMA5072A2-3GT50G-50","category":"Accessory","description":"Amphenol RF Right Angle 50 ÃƒÆ’Ã…Â½Ãƒâ€šÃ‚Â© \u0026 Frequency, (Max 11 GHz) RF Adapter Male Female","quantity":2,"available":2,"location":"RF connector box no. 3\nCupboard S1-1","conditions":"Medium","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://th.rs-online.com/web/p/coaxial-adapters/7009600?cm_mmc=TH-PLA-DS3A-_-google-_-PLA_TH_TH_PMAX_ALL_Catch+All_20260714-_--_-\u0026matchtype=\u0026\u0026campaignid=24032707907\u0026gclsrc=aw.ds\u0026gad_source=1\u0026gad_campaignid=24037174747\u0026gbraid=0AAAAADkeWNOIRMHlVk0vV4FNvqZIr1wLu\u0026gclid=CjwKCAjwwfnUBhAtEiwAfQpAYoy9KkDrjRcfF9XGOsybsgfR6uGEZREK09U4FVt2pEXdkje_e3JqoBoCKHIQAvD_BwE","enabled":true},{"id":"eq22","name":"SMA Adapter","sku":"132170","category":"Accessory","description":"Amphenol RF SMA Series Coaxial Connector Panel Mount Female SMA, 50 ÃƒÆ’Ã…Â½Ãƒâ€šÃ‚Â© Frequency, (Max 6 GHz), Straight Body Solder","quantity":2,"available":2,"location":"RF connector box no. 3\nCupboard S1-1","conditions":"Medium","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://th.rs-online.com/web/p/coaxial-connectors/1440952?cm_mmc=TH-PLA-DS3A-_-google-_-PLA_TH_TH_PMAX_ALL_Catch+All_20260714-_--_-\u0026matchtype=\u0026\u0026campaignid=24032707907\u0026gclsrc=aw.ds\u0026gad_source=1\u0026gad_campaignid=24037174747\u0026gbraid=0AAAAADkeWNOIRMHlVk0vV4FNvqZIr1wLu\u0026gclid=CjwKCAjwwfnUBhAtEiwAfQpAYkNLBLfWhR9aOa1tOIr7CY8E1W-tq8vr6yBAwxI5rlmZfuCbkHPy4BoCbwMQAvD_BwE","enabled":true},{"id":"eq23","name":"SMA Adapter","sku":"ADP-SMAF-SMAF-F-G","category":"Accessory","description":"Linx Straight 50 ÃƒÆ’Ã…Â½Ãƒâ€šÃ‚Â© Coaxial Adapter 0GHz, 18 GHz Female Female","quantity":6,"available":6,"location":"RF connector box no. 3\nCupboard S1-1","conditions":"Medium","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://th.rs-online.com/web/p/coaxial-adapters/2338540?cm_mmc=TH-PLA-DS3A-_-google-_-PLA_TH_TH_PMAX_ALL_Catch+All_20260714-_--_-\u0026matchtype=\u0026\u0026campaignid=24032707907\u0026gclsrc=aw.ds\u0026gad_source=4\u0026gad_campaignid=24037174747\u0026gbraid=0AAAAADkeWNPqT9LBUV1q13X8ZSPAd-LUi\u0026gclid=CjwKCAjwwfnUBhAtEiwAfQpAYpzyi-A8I0LjqTCGkHCVIHDsjc1tg8Qzbv3DFY-_N0cq3mUgScPyyxoC39cQAvD_BwE","enabled":true},{"id":"eq24","name":"SMA Adapter","sku":"2991-6007","category":"Accessory","description":"Amphenol RF Straight 50 ÃƒÆ’Ã…Â½Ãƒâ€šÃ‚Â© RF Adapter 18GHz Female Female","quantity":4,"available":4,"location":"RF connector box no. 3\nCupboard S1-1","conditions":"Medium","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://th.rs-online.com/web/p/coaxial-adapters/6932990","enabled":true},{"id":"eq25","name":"SMA Adapter","sku":"BU-P72973","category":"Accessory","description":"Mueller Electric Straight 50 ÃƒÆ’Ã…Â½Ãƒâ€šÃ‚Â© RF Adapter 18GHz Female Female","quantity":2,"available":2,"location":"RF connector box no. 3\nCupboard S1-1","conditions":"Medium","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://th.rs-online.com/web/p/coaxial-adapters/8884774?cm_mmc=TH-PLA-DS3A-_-google-_-PLA_TH_TH_PMAX_ALL_Catch+All_20260714-_--_-\u0026matchtype=\u0026\u0026campaignid=24032707907\u0026gclsrc=aw.ds\u0026gad_source=1\u0026gad_campaignid=24037174747\u0026gbraid=0AAAAADkeWNOIRMHlVk0vV4FNvqZIr1wLu\u0026gclid=CjwKCAjwwfnUBhAtEiwAfQpAYlekJd4sDhvACsAE9tWxe_Pny_QUnRrVwo-JU397Xo5YqOP6EBj0MhoC0pEQAvD_BwE","enabled":true},{"id":"eq26","name":"Power Supply","sku":"KPS3030D","category":"Equipment","description":"Wanptek KPS3030D 30V/30A Low Ripple High Power DC Adjustable Regulated Variable Switching Power Supply","quantity":3,"available":3,"location":"Tuning Station","conditions":"Hight Risk","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://thai.alibaba.com/product-detail/WANPTEK-BENCH-DC-ADJUSTABLE-POWER-SUPPLY-1600152364090.html","enabled":true},{"id":"eq27","name":"Desktop network analyzer","sku":"N9000A/507","category":"Equipment","description":"Agilent / HP N9000A-507 CXA Signal Analyzer, 9 kHz to 7.5 GHz","quantity":1,"available":1,"location":"Tuning Station","conditions":"Hight Risk","serial":"MY51288403","certNo":"5523631035785418","lastCal":"2026-04-27","nextCal":"2027-04-27","calInterval":"12 Months","remarks":"","link":"https://calright.com/product/agilent-hp-n9000a-503-cxa-signal-analyzer-9-khz-to-3-ghz-2/?srsltid=AfmBOopGyfUE32-H7TAtEt3VU4Fen3WFqqcrKUQ6c5tbfOQGrGpDcArR","enabled":true},{"id":"eq28","name":"Desktop network analyzer","sku":"N9000A/507","category":"Equipment","description":"Agilent / HP N9000A-507 CXA Signal Analyzer, 9 kHz to 7.5 GHz","quantity":1,"available":1,"location":"Tuning Station","conditions":"Hight Risk","serial":"MY54230269","certNo":"5523631035816325","lastCal":"2026-05-06","nextCal":"2027-05-06","calInterval":"12 Months","remarks":"","link":"https://calright.com/product/agilent-hp-n9000a-503-cxa-signal-analyzer-9-khz-to-3-ghz-2/?srsltid=AfmBOopGyfUE32-H7TAtEt3VU4Fen3WFqqcrKUQ6c5tbfOQGrGpDcArR","enabled":true},{"id":"eq29","name":"Universal power sensor","sku":"NRP-Z211RF","category":"Equipment","description":"Power Sensor, 10MHz to 8GHz, -60dBm to +20dBm, 1500 readings / second, N Type Plug, NRP Series","quantity":3,"available":3,"location":"Tuning Station","conditions":"Hight Risk","serial":"117123","certNo":"5523631035855107","lastCal":"2026-05-19","nextCal":"2027-05-19","calInterval":"12 Months","remarks":"","link":"https://www.rohde-schwarz.com/us/products/test-and-measurement/rf-and-microwave-power-sensors/rs-nrp-z2x1-two-path-diode-power-sensors_63493-1099830.html","enabled":true},{"id":"eq30","name":"Universal power sensor","sku":"NRP-Z211RF","category":"Equipment","description":"Power Sensor, 10MHz to 8GHz, -60dBm to +20dBm, 1500 readings / second, N Type Plug, NRP Series","quantity":1,"available":1,"location":"Tuning Station","conditions":"Hight Risk","serial":"106939","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://www.rohde-schwarz.com/us/products/test-and-measurement/rf-and-microwave-power-sensors/rs-nrp-z2x1-two-path-diode-power-sensors_63493-1099830.html","enabled":true},{"id":"eq31","name":"Universal power sensor","sku":"NRP-Z211RF","category":"Equipment","description":"Power Sensor, 10MHz to 8GHz, -60dBm to +20dBm, 1500 readings / second, N Type Plug, NRP Series","quantity":1,"available":1,"location":"Tuning Station","conditions":"Hight Risk","serial":"117125","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://www.rohde-schwarz.com/us/products/test-and-measurement/rf-and-microwave-power-sensors/rs-nrp-z2x1-two-path-diode-power-sensors_63493-1099830.html","enabled":true},{"id":"eq32","name":"SMA Calibration kit","sku":"N/A","category":"Accessory","description":"SMA Calibration Kit - Male Short  Type","quantity":2,"available":2,"location":"SMA Calibration Kit - Male  \nbox\nCupboard S1-2","conditions":"Hight Risk","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"Nanjing PNA Instruments","enabled":true},{"id":"eq33","name":"SMA Calibration kit","sku":"N/A","category":"Accessory","description":"SMA Calibration Kit - Male Open  Type","quantity":2,"available":2,"location":"SMA Calibration Kit - Male  \nbox\nCupboard S1-2","conditions":"Hight Risk","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"Nanjing PNA Instruments","enabled":true},{"id":"eq34","name":"SMA Calibration kit","sku":"N/A","category":"Accessory","description":"SMA Calibration Kit - Male Load Type","quantity":2,"available":2,"location":"SMA Calibration Kit - Male  \nbox\nCupboard S1-2","conditions":"Hight Risk","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"Nanjing PNA Instruments","enabled":true},{"id":"eq35","name":"SMA Calibration kit","sku":"N/A","category":"Accessory","description":"SMA Calibration Kit - Male to Male Adapter type","quantity":2,"available":2,"location":"SMA Calibration Kit - Male  \nbox\nCupboard S1-2","conditions":"Hight Risk","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"Nanjing PNA Instruments","enabled":true},{"id":"eq36","name":"SMA Calibration kit","sku":"N/A","category":"Accessory","description":"SMA Calibration Kit - Female Short  Type","quantity":2,"available":2,"location":"SMA Calibration Kit - Female  \nbox\nCupboard S1-2","conditions":"Hight Risk","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"Nanjing PNA Instruments","enabled":true},{"id":"eq37","name":"SMA Calibration kit","sku":"N/A","category":"Accessory","description":"SMA Calibration Kit - Female Open  Type","quantity":2,"available":2,"location":"SMA Calibration Kit - Female  \nbox\nCupboard S1-2","conditions":"Hight Risk","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"Nanjing PNA Instruments","enabled":true},{"id":"eq38","name":"SMA Calibration kit","sku":"N/A","category":"Accessory","description":"SMA Calibration Kit - Female Load Type","quantity":2,"available":2,"location":"SMA Calibration Kit - Female  \nbox\nCupboard S1-2","conditions":"Hight Risk","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"Nanjing PNA Instruments","enabled":true},{"id":"eq39","name":"SMA Calibration kit","sku":"N/A","category":"Accessory","description":"SMA Calibration Kit - Female to  Female Adapter type","quantity":2,"available":2,"location":"SMA Calibration Kit - Female  \nbox\nCupboard S1-2","conditions":"Hight Risk","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"Nanjing PNA Instruments","enabled":true},{"id":"eq40","name":"N type Calibration Kit","sku":"N/A","category":"Accessory","description":"N type Calibration kit - Female Open Type","quantity":2,"available":2,"location":"SMA Calibration Kit - \nN Type Female  box\nCupboard S1-2","conditions":"Hight Risk","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"Nanjing PNA Instruments","enabled":true},{"id":"eq41","name":"N type Calibration Kit","sku":"N/A","category":"Accessory","description":"N type Calibration kit - Female Short Type","quantity":2,"available":2,"location":"SMA Calibration Kit - \nN Type Female  box\nCupboard S1-2","conditions":"Hight Risk","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"Nanjing PNA Instruments","enabled":true},{"id":"eq42","name":"N type Calibration Kit","sku":"N/A","category":"Accessory","description":"N type Calibration kit - Female Load Type","quantity":2,"available":2,"location":"SMA Calibration Kit - \nN Type Female  box\nCupboard S1-2","conditions":"Hight Risk","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"Nanjing PNA Instruments","enabled":true},{"id":"eq43","name":"N type Calibration Kit","sku":"N/A","category":"Accessory","description":"N type Calibration kit - Female to Female Type","quantity":2,"available":2,"location":"SMA Calibration Kit - \nN Type Female  box\nCupboard S1-2","conditions":"Hight Risk","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"Nanjing PNA Instruments","enabled":true},{"id":"eq44","name":"N type Calibration Kit","sku":"N/A","category":"Accessory","description":"N type Calibration kit - Male Open Type","quantity":2,"available":2,"location":"N Type Calibration Kit - \n Female  box\nCupboard S1-2","conditions":"Hight Risk","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"Nanjing PNA Instruments","enabled":true},{"id":"eq45","name":"N type Calibration Kit","sku":"N/A","category":"Accessory","description":"N type Calibration kit - Male Short Type","quantity":2,"available":2,"location":"N Type Calibration Kit - \n Female  box\nCupboard S1-2","conditions":"Hight Risk","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"Nanjing PNA Instruments","enabled":true},{"id":"eq46","name":"N type Calibration Kit","sku":"N/A","category":"Accessory","description":"N type Calibration kit - Male Load Type","quantity":2,"available":2,"location":"N Type Calibration Kit - \n Female  box\nCupboard S1-2","conditions":"Hight Risk","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"Nanjing PNA Instruments","enabled":true},{"id":"eq47","name":"N type Calibration Kit","sku":"N/A","category":"Accessory","description":"N type Calibration kit - Male to MaleType","quantity":2,"available":2,"location":"N Type Calibration Kit - \n Female  box\nCupboard S1-2","conditions":"Hight Risk","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"Nanjing PNA Instruments","enabled":true},{"id":"eq48","name":"RF Adapters","sku":"SM4268","category":"Accessory","description":"RF Adapters - Between Series N Female (Jack) to SMA Male (Plug) Adapter, Tri-Metal Plated Brass Body, 1.2 VSWR Frequency, (Max 6 GHz)","quantity":2,"available":0,"location":"Unavailable","conditions":"Hight Risk","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://www.mouser.com/en/ProductDetail/Fairview-Microwave/SM4268?qs=3GbUB62Nf7fudgilhvx7wg%3D%3D\u0026srsltid=AfmBOoq956l9d2k-ZJHv-1ACtAIJi1_M8ULQNtzkZ8JTv0zrBvj5vGDq","enabled":false,"needPurchase":true},{"id":"eq49","name":"RF Adapters","sku":"PE910036","category":"Accessory","description":"RF Adapters - Between Series SMA Female to N Female Adapter 50 Ohms \u0026 Frequency (Max 18 GHz)","quantity":2,"available":0,"location":"Unavailable","conditions":"Hight Risk","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://th.mouser.com/th/ProductDetail/Pasternack/PE910036?qs=1ADZffG2MqtnTQJDMmXP2Q%3D%3D\u0026srsltid=AfmBOoqQtiTY5DM9Zdxqis1GSDZM3Kgq5N4utPaoAZGYqm4-AMgYlqMQ","enabled":false,"needPurchase":true},{"id":"eq50","name":"RF Adapters","sku":"SM4221","category":"Accessory","description":"RF Adapters - Between Series SMA Male (Plug) to N Male (Plug) Adapter, Tri-Metal Plated Brass Body, 1.25 VSWR 50 Ohms \u0026 Frequency (Max 18 GHz)","quantity":2,"available":0,"location":"Unavailable","conditions":"Hight Risk","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://th.mouser.com/th/ProductDetail/Fairview-Microwave/SM4221?qs=3GbUB62Nf7c7bkEBCYnnCQ%3D%3D\u0026srsltid=AfmBOooBNCcq4WwC2B2xphIjK2Fr8G6jk3i8hfqvVNDhNGa_Uv5mHVOc","enabled":false,"needPurchase":true},{"id":"eq51","name":"RF Adapters","sku":"Digikey  No: SF2990-6005-ND","category":"Accessory","description":"Adapter Coaxial Connector SMA Jack, Female Socket To SMA Jack, Female Socket 50 Ohms \u0026 Frequency (Max 18 GHz)","quantity":2,"available":0,"location":"Unavailable","conditions":"Hight Risk","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"Amphenol SV Microwave","enabled":false,"needPurchase":true},{"id":"eq52","name":"RF Adapters","sku":"Digikey  No: SF2993-6001-ND","category":"Accessory","description":"Adapter Coaxial Connector SMA Plug, Male Pin To SMA Plug, Male Pin 50 Ohms \u0026 Frequency (Max 18 GHz)","quantity":2,"available":0,"location":"Unavailable","conditions":"Hight Risk","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"Amphenol SV Microwave","enabled":false,"needPurchase":true},{"id":"eq53","name":"RF Adapters","sku":"Digikey  No: SF2997-6003-ND","category":"Accessory","description":"Adapter Coaxial Connector SMA Plug, Male Pin To SMA Jack, Female Socket 50 Ohms \u0026 Frequency (Max 18 GHz)","quantity":2,"available":0,"location":"Unavailable","conditions":"Hight Risk","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"Amphenol SV Microwave","enabled":false,"needPurchase":true},{"id":"eq54","name":"RF Adapters","sku":"Digikey  No: ACX2060-ND","category":"Accessory","description":"Adapter Coaxial Connector N Plug, Male Pin To N Jack, Female Socket 50 Ohms \u0026 Frequency (Max 11 GHz)","quantity":2,"available":0,"location":"Unavailable","conditions":"Hight Risk","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"Amphenol SV Microwave","enabled":false,"needPurchase":true},{"id":"eq55","name":"RF Adapters","sku":"Mouser No: 455-32N7501133NE","category":"Accessory","description":"RF Adapters - Between Series COAXIAL ADAPTER, N, 75 Ohm \u0026 Frequency (Max 11 GHz), plug / plug (male / male)","quantity":2,"available":0,"location":"Unavailable","conditions":"Hight Risk","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"HUBER+SUHNER","enabled":false,"needPurchase":true},{"id":"eq56","name":"RF Adapters","sku":"Mouser No: 455-85240150","category":"Accessory","description":"RF Adapters - Between Series COAXIAL ADAPTER, N, 50 Ohm \u0026 Frequency (Max 12.4 GHz), Bulkhead, jack / jack (female / female)","quantity":2,"available":0,"location":"Unavailable","conditions":"Hight Risk","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"HUBER+SUHNER","enabled":false,"needPurchase":true},{"id":"eq57","name":"RF Adapters","sku":"CA-NM-RSF","category":"Accessory","description":"N Female to RP-SMA Male Coaxial Adapter 50 Ohm","quantity":2,"available":0,"location":"Unavailable","conditions":"Hight Risk","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"N Male to RP-SMA Female Coaxial Adapter | Compact RF Connector Converter | Getic","enabled":false,"needPurchase":true},{"id":"eq58","name":"N Type Female to RP-SMA Male Adapter","sku":"CA-NF-RSM","category":"Accessory","description":"N Type Female to RP-SMA Male Adapter","quantity":2,"available":0,"location":"Unavailable","conditions":"Hight Risk","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://www.getic.com/product/coaxial-adapter-n-female-rpsma-male","enabled":false,"needPurchase":true},{"id":"eq59","name":"N Type Male to RP-SMA Female Adapter","sku":"CA-NM-RSF","category":"Accessory","description":"N Type Male to RP-SMA Female Adapter","quantity":2,"available":0,"location":"Unavailable","conditions":"Hight Risk","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://www.getic.com/product/coaxial-adapter-n-male-rpsma-female","enabled":false,"needPurchase":true},{"id":"eq60","name":"N Type Male to RP-SMA Male Adapter","sku":"CA-NM-RSM","category":"Accessory","description":"N Type Male to RP-SMA Male Adapter","quantity":2,"available":0,"location":"Unavailable","conditions":"Hight Risk","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"N Male to RP-SMA Male Coaxial Adapter ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ Secure RF Connector Conversion | Getic","enabled":false,"needPurchase":true},{"id":"eq61","name":"N type Calibration Kit","sku":"N/A","category":"Accessory","description":"N Type Calibration Kit - Male Short  Type","quantity":1,"available":1,"location":"N type  Calibration Kit - Male  \nbox\nCupboard S1-2","conditions":"Hight Risk","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"Nanjing PNA Instruments","enabled":true},{"id":"eq62","name":"N type Calibration Kit","sku":"N/A","category":"Accessory","description":"N Type Calibration Kit - Male Open  Type","quantity":1,"available":1,"location":"N type  Calibration Kit - Male  \nbox","conditions":"Hight Risk","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"Nanjing PNA Instruments","enabled":true},{"id":"eq63","name":"N type Calibration Kit","sku":"N/A","category":"Accessory","description":"N Type Calibration Kit - Male Load Type","quantity":1,"available":1,"location":"N type  Calibration Kit - Male  \nbox","conditions":"Hight Risk","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"Nanjing PNA Instruments","enabled":true},{"id":"eq64","name":"N type Calibration Kit","sku":"N/A","category":"Accessory","description":"N Type Calibration Kit - Male to Male Adapter type","quantity":1,"available":1,"location":"N type  Calibration Kit - Male  \nbox","conditions":"Hight Risk","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"Nanjing PNA Instruments","enabled":true},{"id":"eq65","name":"N type Calibration Kit","sku":"N/A","category":"Accessory","description":"N type Calibration Kit - Female Short  Type","quantity":1,"available":1,"location":"N type  Calibration Kit - Female  \nbox\nCupboard S1-2","conditions":"Hight Risk","serial":"","certNo":"N/A","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"Nanjing PNA Instruments","enabled":true},{"id":"eq66","name":"N type Calibration Kit","sku":"N/A","category":"Accessory","description":"N type Calibration Kit - Female Open  Type","quantity":1,"available":1,"location":"N type  Calibration Kit - Female  \nbox\nCupboard S1-2","conditions":"Hight Risk","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"Nanjing PNA Instruments","enabled":true},{"id":"eq67","name":"N type Calibration Kit","sku":"N/A","category":"Accessory","description":"N type Calibration Kit - Female Load Type","quantity":1,"available":1,"location":"N type  Calibration Kit - Female  \nbox\nCupboard S1-2","conditions":"Hight Risk","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"Nanjing PNA Instruments","enabled":true},{"id":"eq68","name":"N type Calibration Kit","sku":"N/A","category":"Accessory","description":"N type Calibration Kit - Female to  Female Adapter type","quantity":1,"available":1,"location":"N type  Calibration Kit - Female  \nbox\nCupboard S1-2","conditions":"Hight Risk","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"Nanjing PNA Instruments","enabled":true},{"id":"eq69","name":"Split Core Ferrite","sku":"ZCAT1518-0730-BK","category":"Accessory","description":"Split Core Ferrite, 7 mm, 25 ohm \u0026 Frequency (Max\n500MHz), ZCAT Series","quantity":2,"available":2,"location":"Hard Case for Ferrite\nCupboard S1-1","conditions":"Low sensitive","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://th.element14.com/tdk/zcat1518-0730-bk/ferrite-core-split-7mm-35-ohm/dp/2364654","enabled":true},{"id":"eq70","name":"Split Core Ferrite","sku":"ZCAT2017-0930-BK","category":"Accessory","description":"Split Core Ferrite, 9 mm, 50 MHz, 500 MHz, ZCAT Series","quantity":2,"available":2,"location":"Hard Case for Ferrite\nCupboard S1-1","conditions":"Low sensitive","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://th.element14.com/tdk/zcat2017-0930-bk/ferrite-core-split-9mm-35-ohm/dp/2364656","enabled":true},{"id":"eq71","name":"Split Core Ferrite","sku":"ZCAT2032-0930-BK","category":"Accessory","description":"Split Core Ferrite, 9 mm, ZCAT Series ,\n50 Ohm \u0026 Frequency (Max 500 MHz)","quantity":2,"available":2,"location":"Hard Case for Ferrite\nCupboard S1-1","conditions":"Low sensitive","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://th.element14.com/tdk/zcat2032-0930-bk/split-core-ferrite-50-ohm-9mm/dp/3650659","enabled":true},{"id":"eq72","name":"Split Core Ferrite","sku":"ZCAT2132-1130","category":"Accessory","description":"Split Core Ferrite, 11 mm, 40 ohm, ZCAT Series","quantity":2,"available":2,"location":"Hard Case for Ferrite\nCupboard S1-1","conditions":"Low sensitive","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://th.element14.com/tdk/zcat2132-1130/ferrite-core-split-11mm-40-ohm/dp/1301657","enabled":true},{"id":"eq73","name":"Split Core Ferrite","sku":"ZCAT3035-1330","category":"Accessory","description":"Split Core Ferrite, 13 mm, 10 MHz, 500 MHz, 150 ohm, ZCAT Series","quantity":2,"available":2,"location":"Hard Case for Ferrite\nCupboard S1-1","conditions":"Low sensitive","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://th.element14.com/tdk/zcat3035-1330/ferrite-core-split-13mm-150-ohm/dp/1301661","enabled":true},{"id":"eq74","name":"Split Core Ferrite","sku":"ZCAT1325-0530A","category":"Accessory","description":"Split Core Ferrite, 5 mm, 50 MHz, 500 MHz, 50 ohm, ZCAT Series","quantity":2,"available":2,"location":"Hard Case for Ferrite\nCupboard S1-1","conditions":"Low sensitive","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://th.element14.com/tdk/zcat1325-0530a/ferrite-core-split-5mm-50-ohm/dp/1301647","enabled":true},{"id":"eq75","name":"Split Core Ferrite","sku":"ZCAT1730-0730A-BK","category":"Accessory","description":"Split Core Ferrite, 7 mm, 10 MHz, 500 MHz, 80 ohm, ZCAT Series","quantity":2,"available":2,"location":"Hard Case for Ferrite\nCupboard S1-1","conditions":"Low sensitive","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://th.element14.com/tdk/zcat2032-0930-bk/split-core-ferrite-50-ohm-9mm/dp/3650659","enabled":true},{"id":"eq76","name":"Split Core Ferrite","sku":"ZCAT2035-0930A","category":"Accessory","description":"Split Core Ferrite, 9 mm, 10 MHz, 500 MHz, 50 ohm, ZCAT Series","quantity":2,"available":2,"location":"Hard Case for Ferrite\nCupboard S1-1","conditions":"Low sensitive","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://th.element14.com/tdk/zcat2035-0930a/ferrite-core-split-9mm-50-ohm/dp/1301656","enabled":true},{"id":"eq77","name":"Split Core Ferrite","sku":"ZCAT2235-1030A","category":"Accessory","description":"Split Core Ferrite, 10 mm, 10 MHz, 500 MHz, 100 ohm, ZCAT Series","quantity":2,"available":2,"location":"Hard Case for Ferrite\nCupboard S1-1","conditions":"Low sensitive","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://th.element14.com/tdk/zcat2235-1030a/ferrite-core-split-10mm-50-ohm/dp/1301658","enabled":true},{"id":"eq78","name":"Split Core Ferrite","sku":"ZCAT2436-1330A","category":"Accessory","description":"Split Core Ferrite, 13 mm, 30 ohm, ZCAT Series","quantity":2,"available":2,"location":"Hard Case for Ferrite\nCupboard S1-1","conditions":"Low sensitive","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://th.element14.com/tdk/zcat2436-1330a/ferrite-core-split-13mm-30-ohm/dp/1301659","enabled":true},{"id":"eq79","name":"Dummy Load","sku":"WTF100-8-E5 (WTF100-8)","category":"Accessory","description":"RF Termination Load / Dummy Load","quantity":8,"available":8,"location":"Hard Case Orange\nWaiting area to keep.","conditions":"Low sensitive","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"Similar Ref.","link":"Shanghai Huaxiang Electronics Co., Ltd.","enabled":true},{"id":"eq80","name":"Dummy Load","sku":"DL-50W-3G-NJ","category":"Accessory","description":"RF Termination Load / Dummy Load","quantity":3,"available":3,"location":"Hard Case Orange\nWaiting area to keep.","conditions":"Low sensitive","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"Similar Ref.","link":"https://www.alibaba.com/product-detail/WODF-3GHZ-50W-RF-Coaxial-N_1601925413675.html?spm=a2700.image-text-search.normal_offer.2.22d867af3Qewy1\u0026priceId=6442220fd7324d0bac09730173900dda","enabled":true},{"id":"eq81","name":"Dummy Load","sku":"WDTS100-50-8-B","category":"Accessory","description":"RF High Power Coaxial Fixed Attenuator","quantity":1,"available":1,"location":"Hard Case Orange\nWaiting area to keep.","conditions":"Low sensitive","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"Similar Ref.","link":"Shanghai Huaxiang Electronics Co., Ltd.","enabled":true},{"id":"eq82","name":"Dummy Load","sku":"N-JK-100W-3G","category":"Accessory","description":"100W N-JK Coaxial Fixed Attenuator 3DB DC-3GHz","quantity":1,"available":1,"location":"Hard Case Orange\nWaiting area to keep.","conditions":"Low sensitive","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"Similar Ref.","link":"100W N-JK Coaxial Fixed Attenuator 3DB DC-3GHz | Renhotec","enabled":true},{"id":"eq83","name":"Folding Biconical Antenna","sku":"SAS-542 (P/N: 2052-2)","category":"Accessory","description":"Folding Biconical Antenna, 50 Ohm \u0026 Frequency (Max 330 Mhz)","quantity":1,"available":1,"location":"Hard Case\nLogistics stock area","conditions":"Low sensitive","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"SAS-542 Folding Biconical Antenna","enabled":true},{"id":"eq84","name":"RF Broadband Preamplifier","sku":"PAM-0202","category":"Accessory","description":"RF Broadband Preamplifier , Frequency (Max 330 Mhz)","quantity":1,"available":1,"location":"Hard Case\nLogistics stock area","conditions":"Low sensitive","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://www.ahsystems.com/products/preamplifier/PAM-0202.php","enabled":true},{"id":"eq85","name":"DC Electronics Load","sku":"ET5410A+","category":"Accessory","description":"East Tester ET5410A+ Single - Chanel Programmable\nDC Electronic Load,150 V \u0026 4.5 kÃƒÆ’Ã…Â½Ãƒâ€šÃ‚Â©","quantity":3,"available":3,"location":"Cupboard S2-2","conditions":"Low sensitive","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://www.aliexpress.com/i/3256802690868282.html?gatewayAdapt=4itemAdapt","enabled":true},{"id":"eq86","name":"DC Power Supply","sku":"72-13350","category":"Accessory","description":"Multicomp Pro 72-13350 Programmable Dc Power Supply","quantity":1,"available":1,"location":"Cupboard S2-2","conditions":"Low sensitive","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://www.newark.com/multicomp-pro/72-13350/dc-power-supply-prog-1o-p-30v/dp/88AK0878","enabled":true},{"id":"eq87","name":"Handheld network analyzer","sku":"KC901V","category":"Equipment","description":"KC901V Handheld Network Analyzer","quantity":1,"available":1,"location":"Cupboard S1-2","conditions":"Low sensitive","serial":"21322574","certNo":"5523631035983909","lastCal":"2026-06-29","nextCal":"2027-06-29","calInterval":"12 Months","remarks":"","link":"https://deepace.net/product/kc901v-6-8ghz-network-analyzer/","enabled":true},{"id":"eq88","name":"Handheld network analyzer","sku":"KC901V","category":"Equipment","description":"KC901V Handheld Network Analyzer","quantity":1,"available":1,"location":"Cupboard S1-2","conditions":"Low sensitive","serial":"21322572","certNo":"N/A","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://deepace.net/product/kc901v-6-8ghz-network-analyzer/","enabled":true},{"id":"eq89","name":"Handheld network analyzer","sku":"KC901V","category":"Equipment","description":"KC901V Handheld Network Analyzer","quantity":1,"available":1,"location":"Cupboard S1-2","conditions":"Low sensitive","serial":"21322673","certNo":"N/A","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://deepace.net/product/kc901v-6-8ghz-network-analyzer/","enabled":true},{"id":"eq90","name":"Handheld network analyzer","sku":"KC901V","category":"Equipment","description":"KC901V Handheld Network Analyzer","quantity":1,"available":1,"location":"Cupboard S1-2","conditions":"Low sensitive","serial":"21322675","certNo":"N/A","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://deepace.net/product/kc901v-6-8ghz-network-analyzer/","enabled":true},{"id":"eq91","name":"2462/14B Probe EFD-0691, E-Field 100kHz-6GHz","sku":"TBWA2/40db","category":"Equipment","description":"EMC Near-field Probe Set with 40 dB Wideband Amplifier","quantity":1,"available":1,"location":"Cupboard S1-1","conditions":"Hight Risk","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://signalhound.com/products/emc-near-field-probe-set-40-db-wideband-amplifier/","enabled":true},{"id":"eq92","name":"Thermal Camera","sku":"UNI-T UTi260B","category":"Equipment","description":"Heavy Duty Thermal Camera","quantity":1,"available":1,"location":"Waiting area to keep.","conditions":"Low sensitive","serial":"74ATI0225010174","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://thermal.uni-trend.com/product/uti260b/","enabled":true},{"id":"eq93","name":"Handheld Spectrum Analyzer","sku":"RF Explorer 6G WB PLUS","category":"Equipment","description":"RF Explorer 6G WB PLUS","quantity":1,"available":1,"location":"Chamber room\nno. 01","conditions":"Low sensitive","serial":"BJB9J","certNo":"5523631063057524","lastCal":"2026-07-24","nextCal":"2027-07-24","calInterval":"12 Months","remarks":"","link":"https://j3.rf-explorer.com/6gwbplus","enabled":true},{"id":"eq94","name":"Handheld Spectrum Analyzer","sku":"RF Explorer 6G WB PLUS","category":"Equipment","description":"RF Explorer 6G WB PLUS","quantity":1,"available":1,"location":"Chamber room\nno. 01","conditions":"Low sensitive","serial":"EC3ML","certNo":"5523631063057532","lastCal":"2026-07-24","nextCal":"2027-07-24","calInterval":"12 Months","remarks":"","link":"https://j3.rf-explorer.com/6gwbplus","enabled":true},{"id":"eq95","name":"Handheld Spectrum Analyzer","sku":"RF Explorer 6G WB PLUS","category":"Equipment","description":"RF Explorer 6G WB PLUS","quantity":1,"available":1,"location":"Chamber room\nno. 01","conditions":"Low sensitive","serial":"J7KK9","certNo":"5523631063057548","lastCal":"2026-07-24","nextCal":"2027-07-24","calInterval":"12 Months","remarks":"","link":"https://j3.rf-explorer.com/6gwbplus","enabled":true},{"id":"eq96","name":"Handheld Spectrum Analyzer","sku":"RF Explorer 6G WB PLUS","category":"Equipment","description":"RF Explorer 6G WB PLUS","quantity":1,"available":1,"location":"Chamber room\nno. 01","conditions":"Low sensitive","serial":"3E349","certNo":"5523631063057565","lastCal":"2026-07-24","nextCal":"2027-07-24","calInterval":"12 Months","remarks":"","link":"https://j3.rf-explorer.com/6gwbplus","enabled":true},{"id":"eq97","name":"Handheld Spectrum Analyzer","sku":"RF Explorer 6G WB PLUS","category":"Equipment","description":"RF Explorer 6G WB PLUS","quantity":1,"available":1,"location":"Chamber room\nno. 01","conditions":"Low sensitive","serial":"83394","certNo":"5523631063057570","lastCal":"2026-07-24","nextCal":"2027-07-24","calInterval":"12 Months","remarks":"","link":"https://j3.rf-explorer.com/6gwbplus","enabled":true},{"id":"eq98","name":"Handheld Spectrum Analyzer","sku":"RF Explorer 6G WB PLUS","category":"Equipment","description":"RF Explorer 6G WB PLUS","quantity":1,"available":1,"location":"Chamber room\nno. 01","conditions":"Low sensitive","serial":"5C69A","certNo":"5523631063057571","lastCal":"2026-07-24","nextCal":"2027-07-24","calInterval":"12 Months","remarks":"","link":"https://j3.rf-explorer.com/6gwbplus","enabled":true},{"id":"eq99","name":"Handheld Spectrum Analyzer","sku":"RF Explorer 6G WB PLUS","category":"Equipment","description":"RF Explorer 6G WB PLUS","quantity":1,"available":1,"location":"Chamber room\nno. 01","conditions":"Low sensitive","serial":"JDA65","certNo":"5523631063057578","lastCal":"2026-07-24","nextCal":"2027-07-24","calInterval":"12 Months","remarks":"","link":"https://j3.rf-explorer.com/6gwbplus","enabled":true},{"id":"eq100","name":"Handheld Spectrum Analyzer","sku":"RF Explorer 6G WB PLUS","category":"Equipment","description":"RF Explorer 6G WB PLUS","quantity":1,"available":1,"location":"Chamber room\nno. 01","conditions":"Low sensitive","serial":"833CK","certNo":"5523631063057582","lastCal":"2026-07-24","nextCal":"2027-07-24","calInterval":"12 Months","remarks":"","link":"https://j3.rf-explorer.com/6gwbplus","enabled":true},{"id":"eq101","name":"Handheld Spectrum Analyzer","sku":"RF Explorer 6G WB PLUS","category":"Equipment","description":"RF Explorer 6G WB PLUS","quantity":1,"available":1,"location":"Chamber room\nno. 01","conditions":"Low sensitive","serial":"D57KL","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://j3.rf-explorer.com/6gwbplus","enabled":true},{"id":"eq102","name":"Handheld Spectrum Analyzer","sku":"RF Explorer 6G WB PLUS","category":"Equipment","description":"RF Explorer 6G WB PLUS","quantity":1,"available":1,"location":"Chamber room\nno. 01","conditions":"Low sensitive","serial":"EA7LC","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://j3.rf-explorer.com/6gwbplus","enabled":true},{"id":"eq103","name":"Handheld Spectrum Analyzer","sku":"RF Explorer 6G WB PLUS","category":"Equipment","description":"RF Explorer 6G WB PLUS","quantity":1,"available":1,"location":"Chamber room\nno. 01","conditions":"Low sensitive","serial":"DM77C","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://j3.rf-explorer.com/6gwbplus","enabled":true},{"id":"eq104","name":"Handheld Spectrum Analyzer","sku":"RF Explorer 6G WB PLUS","category":"Equipment","description":"RF Explorer 6G WB PLUS","quantity":1,"available":1,"location":"Chamber room\nno. 01","conditions":"Low sensitive","serial":"7E579","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://j3.rf-explorer.com/6gwbplus","enabled":true},{"id":"eq105","name":"Handheld Spectrum Analyzer","sku":"RF Explorer 6G WB PLUS","category":"Equipment","description":"RF Explorer 6G WB PLUS","quantity":1,"available":1,"location":"Chamber room\nno. 01","conditions":"Low sensitive","serial":"MKB6J","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://j3.rf-explorer.com/6gwbplus","enabled":true},{"id":"eq106","name":"Handheld Spectrum Analyzer","sku":"RF Explorer 6G WB PLUS","category":"Equipment","description":"RF Explorer 6G WB PLUS","quantity":1,"available":1,"location":"Chamber room\nno. 01","conditions":"Low sensitive","serial":"EKAKK","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://j3.rf-explorer.com/6gwbplus","enabled":true},{"id":"eq107","name":"Handheld Spectrum Analyzer","sku":"RF Explorer 6G WB PLUS","category":"Equipment","description":"RF Explorer 6G WB PLUS","quantity":1,"available":1,"location":"Chamber room\nno. 01","conditions":"Low sensitive","serial":"9C8BD","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://j3.rf-explorer.com/6gwbplus","enabled":true},{"id":"eq108","name":"Handheld Spectrum Analyzer","sku":"RF Explorer 6G WB PLUS","category":"Equipment","description":"RF Explorer 6G WB PLUS","quantity":1,"available":1,"location":"Chamber room\nno. 01","conditions":"Low sensitive","serial":"LJC4B","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://j3.rf-explorer.com/6gwbplus","enabled":true},{"id":"eq109","name":"Handheld Spectrum Analyzer","sku":"RF Explorer 6G WB PLUS","category":"Equipment","description":"RF Explorer 6G WB PLUS","quantity":1,"available":1,"location":"Cupboard S1-2(Spoiled)","conditions":"Low sensitive","serial":"7DL63","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://j3.rf-explorer.com/6gwbplus","enabled":true},{"id":"eq110","name":"EMI Shielding","sku":"N/A","category":"Equipment","description":"EMI Shielding Fabric","quantity":2,"available":2,"location":"Waiting area to keep.","conditions":"Low sensitive","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"Suzhou Qiaoya High-tech Co., Ltd.","enabled":true},{"id":"eq111","name":"POWER SPLITTER","sku":"N/A","category":"Equipment","description":"2 Way N Type Power Divider from 0.5 GHz to 6 GHz Rated at 30 Watts","quantity":1,"available":1,"location":"Cupboard S1-1","conditions":"Low sensitive","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://www.alibaba.com/product-detail/XINQY-Power-Splitter-500-to-6000MHz_1600629790667.html","enabled":true},{"id":"eq112","name":"Multimeter","sku":"FLUKE-301A+/CN","category":"Instrument","description":"Fluke 301A+ AC/DC Clamp Meter, 400A, 600V","quantity":1,"available":1,"location":"Shelf level 2","conditions":"Low sensitive","serial":"72900309WS","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://th.rs-online.com/web/p/clamp-meters/2815824?cm_mmc=TH-PLA-DS3A-_-google-_-PLA_TH_TH_PMAX_In+Stock_20260714-_--_-\u0026matchtype=\u0026\u0026campaignid=24032710946\u0026gclsrc=aw.ds\u0026gad_source=1\u0026gad_campaignid=24032729900\u0026gbraid=0AAAAADkeWNOj1HUBWJehB8JcpNpuVOLh_\u0026gclid=CjwKCAiAqabXBhBUEiwAw_SQpRNw2uKPlx1R0bMn4jhQdl-xAx6fBqpz_qWFp8zI5tAy9cC2_XBtIBoC3R4QAvD_BwE","enabled":true},{"id":"eq113","name":"Caliper","sku":"1136-501","category":"Instrument","description":"Waterproof Digital Caliper insize code 1136-501","quantity":1,"available":1,"location":"Shelf level 2","conditions":"Low sensitive","serial":"1606251916","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://shopee.co.th/product/63389764/23720705663?gads_t_sig=gqRjZGVrxHCFomtpsTE0MjUxOnRzc19zZGtfa2V5omt20QACpGFsZ2_SAAAAZKNkZWvAomN0xEAAAAAMc1TPTF0zl9lUk9doKYfbtNkYCBZaTm6dQ6q3WJIrnGYlyLtpSCE1-D6jy2YmlKEe_b7zxJZfI6lpwZ6fqmNpcGhlcnRleHTEbwAAAAwbXtKi35AiZKGwy5wb5r6yuZKS_MtPPeLdvgjsPeZcUw6tj1izg7RzVf7gtAcD3bLIf6hn40Z_OmCn6omTbM08Zgx04mY0Iw77cgNi-Age411VWAefN6TDo6EZy5K1r75vbbyZHVl3-XRP0g\u0026gad_source=1\u0026gad_campaignid=23981607081\u0026gbraid=0AAAAADPpYO0hJ7qa02n6bHxwNwP4yjS1T\u0026gclid=CjwKCAiAqabXBhBUEiwAw_SQpf6Qw8nAV--AlTEkhVhxG-lKbhsWExwBsVCO98MfULJU8ROXPedShhoCWAMQAvD_BwE","enabled":true},{"id":"eq114","name":"Multimeter","sku":"17B MAX","category":"Instrument","description":"Fluke 17B MAX Digital Multimeter","quantity":1,"available":1,"location":"Shelf level 2","conditions":"Low sensitive","serial":"72900578WS","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://www.it-elec.com/product/837/fluke-17b-max-digital-multimeter","enabled":true},{"id":"eq115","name":"Tachometer","sku":"UT372","category":"Instrument","description":"Digital tachometer, 5-digit, USB","quantity":1,"available":1,"location":"Shelf level 2","conditions":"Low sensitive","serial":"243730071","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://www.reichelt.com/de/en/shop/product/digital_tachometer_5-digit_usb-141795","enabled":true},{"id":"eq116","name":"Multimeter","sku":"UT204+","category":"Instrument","description":"Digital Clamp Meter UNI-T UT204+","quantity":1,"available":1,"location":"Shelf level 2","conditions":"Low sensitive","serial":"N/A","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://www.vongjorn.com/product/5495/digital-clamp-meter-uni-t-ut204","enabled":true},{"id":"eq117","name":"Multimeter","sku":"UT204","category":"Instrument","description":"Clamp Meter Digital UNI-T UT204","quantity":1,"available":1,"location":"Shelf level 2","conditions":"Low sensitive","serial":"N/A","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://www.it-elec.com/product/10/clamp-meter-digital-uni-t-ut204-2","enabled":true},{"id":"eq118","name":"Caliper","sku":"1108-150","category":"Instrument","description":"DIGITAL CALIPERS (STANDARD TYPE) (1108-150)","quantity":1,"available":1,"location":"Shelf level 2","conditions":"Low sensitive","serial":"1912244659","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://th.misumi-ec.com/th/vona2/detail/223304232067/?HissuCode=1108-150\u0026srsltid=AYCX9vK-mH9wu-aMKL4gwY0q6pZbVwW7CU9pdA_5QGFX4i6dtJeIct3J","enabled":true},{"id":"eq119","name":"Caliper","sku":"1108-150","category":"Instrument","description":"DIGITAL CALIPERS (STANDARD TYPE) (1108-150)","quantity":1,"available":1,"location":"Shelf level 2","conditions":"Low sensitive","serial":"1912244662","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://th.misumi-ec.com/th/vona2/detail/223304232067/?HissuCode=1108-150\u0026srsltid=AYCX9vK-mH9wu-aMKL4gwY0q6pZbVwW7CU9pdA_5QGFX4i6dtJeIct3J","enabled":true},{"id":"eq120","name":"Caliper","sku":"DL91150","category":"Instrument","description":"DL91150 Stainless Steel Digital Vernier Caliper 6ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â³ (DELI)","quantity":1,"available":1,"location":"Shelf level 2","conditions":"Low sensitive","serial":"N/A","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://th.delitoolsglobal.com/products/edl91150-stainless-steel-digital-caliper.html","enabled":true},{"id":"eq121","name":"KWS-AC300","sku":"KWS-AC300","category":"Instrument","description":"Universal SOCKET Power Strip","quantity":1,"available":1,"location":"Shelf level 2","conditions":"Low sensitive","serial":"N/A","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://th.aliexpress.com/item/1005005710705842.html?src=google\u0026src=google\u0026albch=shopping\u0026acnt=615-992-9880\u0026isdl=y\u0026slnk=\u0026plac=\u0026mtctp=\u0026albbt=Google_7_shopping\u0026aff_platform=google\u0026aff_short_key=_oFgTQeV\u0026gclsrc=aw.ds\u0026albagn=888888\u0026ds_e_adid=\u0026ds_e_matchtype=\u0026ds_e_device=c\u0026ds_e_network=x\u0026ds_e_product_group_id=\u0026ds_e_product_id=th1005005710705842\u0026ds_e_product_merchant_id=5853012414\u0026ds_e_product_country=TH\u0026ds_e_product_language=th\u0026ds_e_product_channel=online\u0026ds_e_product_store_id=\u0026ds_url_v=2\u0026albcp=23862218563\u0026albag=\u0026isSmbAutoCall=false\u0026needSmbHouyi=false\u0026gad_source=1\u0026gad_campaignid=23857727414\u0026gbraid=0AAAAA_TvRHrR-oVlG_hyOeiNe7UMgs3vd\u0026gclid=CjwKCAiAzKvXBhBAEiwABLl9AgzELFm8-7nQZwatJxvdbOriw9GDnNE7kIwaqwQLerXVhOQemTvYRBoCNbQQAvD_BwE","enabled":true},{"id":"eq122","name":"N/A","sku":"N/A","category":"Instrument","description":"ORCA","quantity":2,"available":2,"location":"Shelf level 1","conditions":"Low sensitive","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://shopee.co.th/%E0%B8%9F%E0%B8%B8%E0%B8%95%E0%B9%80%E0%B8%AB%E0%B8%A5%E0%B9%87%E0%B8%81-%E0%B9%84%E0%B8%A1%E0%B9%89%E0%B8%9A%E0%B8%A3%E0%B8%A3%E0%B8%97%E0%B8%B1%E0%B8%94%E0%B9%80%E0%B8%AB%E0%B8%A5%E0%B9%87%E0%B8%81-Stainless-Steel-ORCA-%E0%B9%84%E0%B8%A1%E0%B9%89%E0%B8%9A%E0%B8%A3%E0%B8%A3%E0%B8%97%E0%B8%B1%E0%B8%94-%E0%B9%84%E0%B8%A1%E0%B9%89%E0%B8%9F%E0%B8%B8%E0%B8%95-%E0%B8%AD%E0%B8%AD%E0%B8%A3%E0%B9%8C%E0%B8%81%E0%B9%89%E0%B8%B2-%E0%B8%82%E0%B8%99%E0%B8%B2%E0%B8%94-45cm-60cm-i.187550808.7197566980?extraParams=%7B%22display_model_id%22%3A94326209342%2C%22model_selection_logic%22%3A3%7D\u0026image_ids=7f7715b36ed5bc3c5f35b739f7d5c4d0","enabled":true},{"id":"eq123","name":"N/A","sku":"N/A","category":"Instrument","description":"I.N.C.A","quantity":2,"available":2,"location":"Shelf level 1","conditions":"Low sensitive","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://shopee.co.th/product/87219899/6178490218?gads_t_sig=gqRjZGVrxHCFomtpsTE0MjUxOnRzc19zZGtfa2V5omt20QACpGFsZ2_SAAAAZKNkZWvAomN0xEAAAAAMc1TPTF0zl9lUk9doKYfbtNkYCBZaTm6dQ6q3WJIrnGYlyLtpSCE1-D6jy2YmlKEe_b7zxJZfI6lpwZ6fqmNpcGhlcnRleHTEbQAAAAysNOPQZjx5EBhVls-rlAZ8exYUB_AJ4nJ_jTM62T6SwNeU1gMYdzyke3qWMXVRcaAazthi0FfgSHmE130_vEPoHXaT0V4acNIWU8nCwx_DoRv-h3MdRMGz3cZnh7NeT_skh3qwJ7cHeEA\u0026gad_source=1\u0026gad_campaignid=23981607081\u0026gbraid=0AAAAADPpYO0hJ7qa02n6bHxwNwP4yjS1T\u0026gclid=CjwKCAiAzKvXBhBAEiwABLl9AtBUkI_UtRixkoLvkJmZ8V1XNWRwZ7WSKb-DX-fBYe68Sbhw7v0xcxoCE4YQAvD_BwE","enabled":true},{"id":"eq124","name":"N/A","sku":"N/A","category":"Instrument","description":"Tsushima","quantity":2,"available":2,"location":"Shelf level 1","conditions":"Low sensitive","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://www.google.com/search?q=%E0%B9%84%E0%B8%A1%E0%B9%89%E0%B8%9A%E0%B8%A3%E0%B8%A3%E0%B8%97%E0%B8%B1%E0%B8%94+stainless+60+cm\u0026sca_esv=f0f7d3a8a529a5b8\u0026udm=2\u0026biw=2133\u0026bih=1012\u0026sxsrf=AKL5yDh6OdtudiSFoBGwwHkdVp0dxYGnpQ%3A1793785043910\u0026ei=0_zqasyPN92khvcPzdDBuQQ\u0026ved=2ahUKEwiMxeGCgu6XAxVdkuEIHU1oMEcQ4dUDegQIBhAN\u0026uact=5\u0026oq=%E0%B9%84%E0%B8%A1%E0%B9%89%E0%B8%9A%E0%B8%A3%E0%B8%A3%E0%B8%97%E0%B8%B1%E0%B8%94+stainless+60+cm\u0026gs_lp=Egtnd3Mtd2l6LWltZyIr4LmE4Lih4LmJ4Lia4Lij4Lij4LiX4Lix4LiUIHN0YWlubGVzcyA2MCBjbUjMOlCkA1jrOHAEeACQAQCYAYQBoAGBDqoBBDI0LjG4AQPIAQD4AQGYAhegAuELqAIKwgIHECMYyQIYJ8ICCxAAGIAEGLEDGIMBwgIOEAAYgAQYigUYsQMYgwHCAggQABiABBixA8ICChAjGMkCGOoCGCfCAgUQABiABMICCRAAGIAEGBMYCsICBxAAGIAEGBPCAgYQABgeGBPCAgQQABgewgIGEAAYCBgemAMEiAYBkgcEMjIuMaAH4GeyBwQxOS4xuAfYC8IHBjQuMTguMcgHJ4AIAQ\u0026sclient=gws-wiz-img#sv=CAMSURoyKhBlLWVpbmtlV05KUWhPLUNNMg5laW5rZVdOSlFoTy1DTToOVmJpRnh6d0psYWg0M00gBCoXCgFzEhBlLWVpbmtlV05KUWhPLUNNGAEwARgHIL3IpbgGSggQAhgBIAIoAQ","enabled":true},{"id":"eq125","name":"N/A","sku":"N/A","category":"Instrument","description":"Deli","quantity":1,"available":1,"location":"Shelf level 1","conditions":"Low sensitive","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://www.hardwarehouse.co.th/product/1174139-EA?srsltid=AYCX9vLOc2udOnbZm27yTqgQ7_MlbWoDi39K5uuRU2pfQrCvti--fpUh","enabled":true},{"id":"eq126","name":"ARC-12","sku":"ARC-12","category":"Instrument","description":"lularAluminium","quantity":1,"available":1,"location":"Shelf level 1","conditions":"Low sensitive","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"http://www.xn--22caflb3ioceg1etb4c6bya6kf2kf.com/product/1202/%E0%B9%84%E0%B8%A1%E0%B9%89%E0%B8%9A%E0%B8%A3%E0%B8%A3%E0%B8%97%E0%B8%B1%E0%B8%94%E0%B8%AD%E0%B8%A5%E0%B8%B9%E0%B8%A1%E0%B8%B4%E0%B9%80%E0%B8%99%E0%B8%B5%E0%B8%A2%E0%B8%A1%E0%B8%84%E0%B8%B2%E0%B8%94%E0%B8%AA%E0%B8%B5-12-%E0%B8%99%E0%B8%B4%E0%B9%89%E0%B8%A7-%E0%B8%82%E0%B8%B2%E0%B8%A2%E0%B8%A2%E0%B8%81%E0%B9%82%E0%B8%AB%E0%B8%A5-12-%E0%B8%AD%E0%B8%B1%E0%B8%99-%E0%B8%84%E0%B8%A5%E0%B8%B0%E0%B8%AA%E0%B8%B5","enabled":true},{"id":"eq127","name":"Measuring tape","sku":"KKP90573","category":"Instrument","description":"Measuring tape KINGKONG PRO 2CM","quantity":1,"available":1,"location":"Shelf level 1","conditions":"Low sensitive","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://www.thaiwatsadu.com/th/product/%E0%B8%95%E0%B8%A5%E0%B8%B1%E0%B8%9A%E0%B9%80%E0%B8%A1%E0%B8%95%E0%B8%A3%E0%B8%9E%E0%B8%A5%E0%B8%B2%E0%B8%AA%E0%B8%95%E0%B8%B4%E0%B8%81%E0%B8%AB%E0%B8%B8%E0%B9%89%E0%B8%A1%E0%B8%A2%E0%B8%B2%E0%B8%87%E0%B9%80%E0%B8%84%E0%B8%A5%E0%B8%B7%E0%B8%AD%E0%B8%9A%E0%B9%84%E0%B8%99%E0%B8%A5%E0%B8%AD%E0%B8%99-25-%E0%B8%A1%E0%B8%A1-8-%E0%B9%80%E0%B8%A1%E0%B8%95%E0%B8%A3-GIANT-KINGKONG-PRO-%E0%B8%A3%E0%B8%B8%E0%B9%88%E0%B8%99-TWD002NCM8-60420383","enabled":true},{"id":"eq128","name":"Measuring tape","sku":"HiLock-19","category":"Instrument","description":"Measuring tape Tajima 5 m","quantity":1,"available":1,"location":"Shelf level 1","conditions":"Low sensitive","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://www.rancadee.com/p/61599/tajima-5-hilock-19","enabled":true},{"id":"eq129","name":"KKP1004M","sku":"KKP1004M","category":"Instrument","description":"KINGKONGGIANT PRO","quantity":1,"available":1,"location":"Shelf level 1","conditions":"Low sensitive","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://www.thaiwatsadu.com/th/product/%E0%B8%84%E0%B8%A3%E0%B8%B6%E0%B9%88%E0%B8%87%E0%B8%A7%E0%B8%87%E0%B8%81%E0%B8%A5%E0%B8%A1%E0%B8%9E%E0%B8%A3%E0%B9%89%E0%B8%AD%E0%B8%A1%E0%B8%A3%E0%B8%B0%E0%B8%94%E0%B8%B1%E0%B8%9A%E0%B8%99%E0%B9%89%E0%B8%B3%E0%B8%A7%E0%B8%B1%E0%B8%94%E0%B8%A1%E0%B8%B8%E0%B8%A1-GIANT-KINGKONG-PRO-%E0%B8%A3%E0%B8%B8%E0%B9%88%E0%B8%99-KKP1004M-%E0%B8%AA%E0%B8%B5%E0%B9%80%E0%B8%AB%E0%B8%A5%E0%B8%B7%E0%B8%AD%E0%B8%87-60334766","enabled":true},{"id":"eq130","name":"Water level gauge","sku":"N/A","category":"Instrument","description":"3-Way Spirit Level for Horizontal, Vertical and 45ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â° Angle Measurement","quantity":1,"available":1,"location":"Shelf level 1","conditions":"Low sensitive","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://shopee.co.th/%E0%B9%84%E0%B8%A1%E0%B9%89%E0%B8%A7%E0%B8%B1%E0%B8%94%E0%B8%A3%E0%B8%B0%E0%B8%94%E0%B8%B1%E0%B8%9A%E0%B8%99%E0%B9%89%E0%B8%B3-%E0%B9%80%E0%B8%84%E0%B8%A3%E0%B8%B7%E0%B9%88%E0%B8%AD%E0%B8%87%E0%B8%A7%E0%B8%B1%E0%B8%94%E0%B8%A3%E0%B8%B0%E0%B8%94%E0%B8%B1%E0%B8%9A%E0%B8%99%E0%B9%89%E0%B8%B3-%E0%B8%AD%E0%B8%B8%E0%B8%9B%E0%B8%81%E0%B8%A3%E0%B8%93%E0%B9%8C%E0%B8%A7%E0%B8%B1%E0%B8%94%E0%B8%A3%E0%B8%B0%E0%B8%94%E0%B8%B1%E0%B8%9A%E0%B8%99%E0%B9%89%E0%B8%B3-%E0%B8%AD%E0%B8%B8%E0%B8%9B%E0%B8%81%E0%B8%A3%E0%B8%93%E0%B9%8C%E0%B8%A7%E0%B8%B1%E0%B8%94%E0%B8%84%E0%B8%A7%E0%B8%B2%E0%B8%A1%E0%B8%A5%E0%B8%B2%E0%B8%94%E0%B9%80%E0%B8%AD%E0%B8%B5%E0%B8%A2%E0%B8%87-water-level-i.39479100.2116385831?extraParams=%7B%22display_model_id%22%3A22932103446%2C%22model_selection_logic%22%3A3%7D\u0026image_ids=8d61f5b5c2d22d8f8834c71de98f4d21","enabled":true},{"id":"eq131","name":"Eagle One","sku":"N/A","category":"Instrument","description":"Stainless Steel Square Ruler, 1.0 mm Thick, 45ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â° and 90ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â° Angles, Metric and Inch Scale","quantity":1,"available":1,"location":"Shelf level 1","conditions":"Low sensitive","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://shopee.co.th/EAGLE-ONE-%E0%B9%84%E0%B8%A1%E0%B9%89%E0%B8%9A%E0%B8%A3%E0%B8%A3%E0%B8%97%E0%B8%B1%E0%B8%94%E0%B9%80%E0%B8%AB%E0%B8%A5%E0%B9%87%E0%B8%81%E0%B8%89%E0%B8%B2%E0%B8%81-12-%E0%B8%99%E0%B8%B4%E0%B9%89%E0%B8%A7-%E0%B9%80%E0%B8%AB%E0%B8%A5%E0%B9%87%E0%B8%81%E0%B8%89%E0%B8%B2%E0%B8%81-%E0%B9%84%E0%B8%A1%E0%B9%89%E0%B8%9A%E0%B8%A3%E0%B8%A3%E0%B8%97%E0%B8%B1%E0%B8%94%E0%B8%89%E0%B8%B2%E0%B8%81-%E0%B8%A7%E0%B8%B1%E0%B8%94%E0%B8%89%E0%B8%B2%E0%B8%81-%E0%B8%95%E0%B8%B1%E0%B9%89%E0%B8%87%E0%B8%89%E0%B8%B2%E0%B8%81-i.754254511.24377833930","enabled":true},{"id":"eq132","name":"water level gauge","sku":"176-5569","category":"Instrument","description":"RS PRO 43 mm Spirit Level","quantity":1,"available":1,"location":"Shelf level 1","conditions":"Low sensitive","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://th.rs-online.com/web/p/spirit-levels-inclinometers/1765569?cm_mmc=TH-PLA-DS3A-_-google-_-PLA_TH_TH_PMAX_ALL_Catch+All_20260714-_--_-\u0026matchtype=\u0026\u0026campaignid=24032707907\u0026gclsrc=aw.ds\u0026gad_source=1\u0026gad_campaignid=24037174747\u0026gbraid=0AAAAADkeWNMihWLXhzinDPUAYRKFCdzFh\u0026gclid=CjwKCAiAzKvXBhBAEiwABLl9AluoWCGHCOakVYHz08PXmZ-l0F_s4nUxZE1cFJupcBY6xAfa6J528RoCTxoQAvD_BwE","enabled":true},{"id":"eq133","name":"Barcode Scanner","sku":"DLI-0014","category":"Equipment","description":"Deli Barcode Scanner S221","quantity":1,"available":1,"location":"Shelf level 1","conditions":"Low sensitive","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://www.abshop.in.th/shop/deli-s221-wireless-barcode-scanner-with-receiver-18490?gad_source=1\u0026gad_campaignid=23952647505\u0026gbraid=0AAAAApdJeEOodSRz4behOWD1jumCxEs8W\u0026gclid=CjwKCAiAzKvXBhBAEiwABLl9AlKwSmpJBKPlfj1DzXLOC6P3VkAg2yb_JqCXANu7JlrhYxRlJw8SWRoCu1AQAvD_BwE#attribute_values=310,677,899,2051","enabled":true},{"id":"eq134","name":"Printer","sku":"PT-D450","category":"Instrument","description":"Brother P-Touch","quantity":1,"available":1,"location":"Shelf level 2","conditions":"Low sensitive","serial":"E76465A2Z830448","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://www.techpro.co.th/product/31778-29356/%E0%B9%80%E0%B8%84%E0%B8%A3%E0%B8%B7%E0%B9%88%E0%B8%AD%E0%B8%87%E0%B8%9E%E0%B8%B4%E0%B8%A1%E0%B8%9E%E0%B9%8C%E0%B8%89%E0%B8%A5%E0%B8%B2%E0%B8%81-%E0%B8%AA%E0%B8%B5%E0%B8%94%E0%B8%B3-brother-pt-d450","enabled":true},{"id":"eq135","name":"Wire Terminal Box","sku":"N/A","category":"Equipment","description":"Wire Terminal Box Single Phase 2-in 4out","quantity":4,"available":4,"location":"Shelf level 2","conditions":"Low sensitive","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://shopee.co.th/FJ6-JHD-%E0%B8%81%E0%B8%A5%E0%B9%88%E0%B8%AD%E0%B8%87%E0%B9%80%E0%B8%97%E0%B8%AD%E0%B8%A3%E0%B9%8C%E0%B8%A1%E0%B8%B4%E0%B8%99%E0%B8%AD%E0%B8%A5%E0%B8%9A%E0%B8%A5%E0%B9%87%E0%B8%AD%E0%B8%84%E0%B9%81%E0%B8%A2%E0%B8%81%E0%B8%AA%E0%B8%B2%E0%B8%A2-i.273963254.41611856113","enabled":true},{"id":"eq136","name":"Wire Terminal Box","sku":"N/A","category":"Equipment","description":"Wire Terminal Box Single Phase 2-in 6out","quantity":3,"available":3,"location":"Shelf level 2","conditions":"Low sensitive","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://shopee.co.th/FJ6-JHD-%E0%B8%81%E0%B8%A5%E0%B9%88%E0%B8%AD%E0%B8%87%E0%B9%80%E0%B8%97%E0%B8%AD%E0%B8%A3%E0%B9%8C%E0%B8%A1%E0%B8%B4%E0%B8%99%E0%B8%AD%E0%B8%A5%E0%B8%9A%E0%B8%A5%E0%B9%87%E0%B8%AD%E0%B8%84%E0%B9%81%E0%B8%A2%E0%B8%81%E0%B8%AA%E0%B8%B2%E0%B8%A2-i.273963254.41611856113","enabled":true},{"id":"eq137","name":"Wire Terminal Box","sku":"N/A","category":"Equipment","description":"Wire Terminal Box Single Phase 2-in 8out","quantity":3,"available":3,"location":"Shelf level 2","conditions":"Low sensitive","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://shopee.co.th/FJ6-JHD-%E0%B8%81%E0%B8%A5%E0%B9%88%E0%B8%AD%E0%B8%87%E0%B9%80%E0%B8%97%E0%B8%AD%E0%B8%A3%E0%B9%8C%E0%B8%A1%E0%B8%B4%E0%B8%99%E0%B8%AD%E0%B8%A5%E0%B8%9A%E0%B8%A5%E0%B9%87%E0%B8%AD%E0%B8%84%E0%B9%81%E0%B8%A2%E0%B8%81%E0%B8%AA%E0%B8%B2%E0%B8%A2-i.273963254.41611856113","enabled":true},{"id":"eq138","name":"Measuring tape","sku":"N/A","category":"Instrument","description":"Measuring tape Champion 3.5 m","quantity":1,"available":1,"location":"Shelf level 1","conditions":"Low sensitive","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"N/A","enabled":true},{"id":"eq139","name":"Multimeter","sku":"N/A","category":"Instrument","description":"UT120 Series Pocket Size Digital Multimeters","quantity":1,"available":1,"location":"Shelf level 2","conditions":"Low sensitive","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://shopee.co.th/product/533328022/43878978340?gads_t_sig=gqRjZGVrxHCFomtpsTE0MjUxOnRzc19zZGtfa2V5omt20QACpGFsZ2_SAAAAZKNkZWvAomN0xEAAAAAMc1TPTF0zl9lUk9doKYfbtNkYCBZaTm6dQ6q3WJIrnGYlyLtpSCE1-D6jy2YmlKEe_b7zxJZfI6lpwZ6fqmNpcGhlcnRleHTEcQAAAAzrQq4HnsBCQ4sGD2kZfPG4JeFKd7WcdA8slZ7O-b-rKQyI7j6Em0ZGVAZnSby9N0ObwCQFQeVT8zC4rDVNVMAWqYyGrymRx8jBzQ7cHW0PPCwJKPyuaSgXDRlR9GRc2-fcmJCMsbouwfdK9W_8\u0026gad_source=1\u0026gad_campaignid=23298052959\u0026gbraid=0AAAAADPpYO1AW1Thb4imPAcrRm1WEHlKT\u0026gclid=Cj0KCQiAnsvXBhCqARIsAHKgGNayIaXzysdZTiECfuvo8rXhnPzdFLr_ERp-netzENUALrU4TL6Re5AaAj5BEALw_wcB","enabled":true},{"id":"eq140","name":"Measuring tape","sku":"N/A","category":"Instrument","description":"AT INDY 30m Steel Measuring Tape, Model 34330C","quantity":1,"available":1,"location":"Shelf level 1","conditions":"Low sensitive","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://shopee.co.th/AT-INDY-%E0%B9%80%E0%B8%97%E0%B8%9B%E0%B8%A7%E0%B8%B1%E0%B8%94%E0%B8%97%E0%B8%B5%E0%B9%88-%E0%B8%AA%E0%B8%B2%E0%B8%A2%E0%B9%80%E0%B8%AB%E0%B8%A5%E0%B9%87%E0%B8%81-30-%E0%B9%80%E0%B8%A1%E0%B8%95%E0%B8%A3-%E0%B8%A3%E0%B8%B8%E0%B9%88%E0%B8%99-%E0%B8%81%E0%B8%A5%E0%B8%A1-34330C-%E0%B9%80%E0%B8%97%E0%B8%9B%E0%B8%A7%E0%B8%B1%E0%B8%94%E0%B8%A3%E0%B8%B0%E0%B8%A2%E0%B8%B0-%E0%B9%80%E0%B8%97%E0%B8%9B%E0%B8%A7%E0%B8%B1%E0%B8%94%E0%B8%9E%E0%B8%B7%E0%B9%89%E0%B8%99%E0%B8%97%E0%B8%B5%E0%B9%88-%E0%B8%AA%E0%B8%B2%E0%B8%A2%E0%B8%A7%E0%B8%B1%E0%B8%94%E0%B8%A3%E0%B8%B0%E0%B8%A2%E0%B8%B0-i.114881280.1768564584","enabled":true},{"id":"eq141","name":"R Dummy Load","sku":"N/A","category":"Equipment","description":"R Dummy Load","quantity":1,"available":1,"location":"Shelf level 1","conditions":"Low sensitive","serial":"","certNo":"","lastCal":"","nextCal":"","calInterval":"","remarks":"","link":"https://shopee.co.th/R-Resistor-%E0%B8%95%E0%B8%B1%E0%B8%A7%E0%B8%95%E0%B9%89%E0%B8%B2%E0%B8%99%E0%B8%97%E0%B8%B2%E0%B8%99-100w-*%E0%B8%AA%E0%B8%AD%E0%B8%9A%E0%B8%96%E0%B8%B2%E0%B8%A1%E0%B8%84%E0%B9%88%E0%B8%B2%E0%B8%97%E0%B8%B2%E0%B8%87%E0%B9%81%E0%B8%8A%E0%B8%97%E0%B9%84%E0%B8%94%E0%B9%89%E0%B8%84%E0%B9%88%E0%B8%B0*-(1-%E0%B8%95%E0%B8%B1%E0%B8%A7-%E0%B8%AD%E0%B8%AD%E0%B9%80%E0%B8%94%E0%B8%AD%E0%B8%A3%E0%B9%8C)-i.257564.6451960964?extraParams=%7B%22display_model_id%22%3A63694199493%2C%22model_selection_logic%22%3A3%7D\u0026image_ids=79ede5ad6f0e03874a5f8205dfb98cb8","enabled":true}];
+
+/* Storage locations extracted from the four "RF Layout" sheets. */
+const EXCEL_LAYOUT = [{"id":"layout0","name":"RF Layout 1 - S1-1","title":"RF EQUIPMENT STORAGE LOCATION \u0026 LAYOUT","subtitle":"Location : RF Room CUPBOARD S1-1 CONNECTOR BOXES FERRITE 1 / 4","blocks":[{"location":"RF connector box no. 1 Cupboard S1-1","entries":[{"part":"R03-N01-10009","description":"N Jack Female to N Jack Female Adapter Straight 4 Hole Flange","qty":"1","serial":""},{"part":"172126","description":"N-Type Jack to N-Type Plug Adapter 50 Ohm Right Angle","qty":"3","serial":""}]},{"location":"RF connector box no. 2 Cupboard S1-1","entries":[{"part":"SM4221","description":"COAX ADAPT SMA TO N","qty":"1","serial":""},{"part":"AD-N1N1","description":"RF Adapter, N Male to N Male","qty":"1","serial":""},{"part":"4912-NA-JJ-18G-ND","description":"N female to N female adapter","qty":"1","serial":""},{"part":"AXA-NFNF","description":"Coaxial Adapter, Type N-Female / Female","qty":"1","serial":""},{"part":"AD-N2SA1","description":"RF Adapter, N Female to SMA Male","qty":"1","serial":""},{"part":"AD-N2SA2","description":"RF Adapter, N Female to SMA Female","qty":"2","serial":""},{"part":"PCM-SHM-0043","description":"RF Adapters - Sealed N Female to N Female Bulkhead Mount Adapter","qty":"2","serial":""},{"part":"MAJ-NCJ-SBH-05","description":"SMA Female to N Type Female Bulkhead Waterproof Adapter","qty":"2","serial":""},{"part":"AXA-NFRSP","description":"Coaxial Adapter, N-Female / RP-SMA Plug","qty":"2","serial":""},{"part":"ADP-NM-BNCF","description":"RF / Coaxial Adaptor, RF Coaxial, Straight Adapter, N, Plug, BNC, Receptacle","qty":"1","serial":""},{"part":"N-043-1DGN","description":"N Male 50 Ohm Terminator","qty":"1","serial":""}]},{"location":"RF connector box no. 3 Cupboard S1-1","entries":[{"part":"ADP-SMAF-MMCXF","description":"MMCX female jack to SMA male plug straight Connector Adapter 50ohm 50 ohm Coax","qty":"2","serial":""},{"part":"21010-SMA","description":"SMA Coaxial Termination Open","qty":"2","serial":""},{"part":"SMA Fixed Dummy Load Termination","description":"High-Performance RF SMA 50 Ohm Coaxial Dummy Load Male","qty":"10","serial":""},{"part":"NMRF FBP-868S","description":"SAW Bandpass Filter (RF BPF) for 868 MHz","qty":"1","serial":""},{"part":"NMRF FBP-1590S","description":"SAW Bandpass Filter (RF BPF) for 1590 MHz","qty":"1","serial":""},{"part":"ADAPT/SMAM/SMAM","description":"Siretta Straight SMA Connector Male Male","qty":"3","serial":""},{"part":"SMA5072A2-3GT50G-50","description":"Amphenol RF Right Angle 50 RF Adapter Male Female","qty":"2","serial":""},{"part":"132170","description":"Amphenol RF SMA Series Coaxial Connector Panel Mount Female SMA, 50 , Straight Body Solder","qty":"2","serial":""},{"part":"ADP-SMAF-SMAF-F-G","description":"Linx Straight 50 Coaxial Adapter 0GHz, 18 GHz Female Female","qty":"6","serial":""},{"part":"2991-6007","description":"Amphenol RF Straight 50 RF Adapter 18GHz Female Female","qty":"4","serial":""},{"part":"BU-P72973","description":"Mueller Electric Straight 50 RF Adapter 18GHz Female Female","qty":"2","serial":""}]},{"location":"Hard Case for Ferrite Cupboard S1-1","entries":[{"part":"ZCAT1518-0730-BK","description":"Split Core Ferrite, 7 mm, 25 ohm, ZCAT Series","qty":"2","serial":""},{"part":"ZCAT2017-0930-BK","description":"Split Core Ferrite, 9 mm, 50 MHz, 500 MHz, ZCAT Series","qty":"2","serial":""},{"part":"ZCAT2032-0930-BK","description":"Split Core Ferrite, 9 mm, ZCAT Series","qty":"2","serial":""},{"part":"ZCAT2132-1130","description":"Split Core Ferrite, 11 mm, 40 ohm, ZCAT Series","qty":"2","serial":""},{"part":"ZCAT3035-1330","description":"Split Core Ferrite, 13 mm, 10 MHz, 500 MHz, 150 ohm, ZCAT Series","qty":"2","serial":""},{"part":"ZCAT1325-0530A","description":"Split Core Ferrite, 5 mm, 50 MHz, 500 MHz, 50 ohm, ZCAT Series","qty":"2","serial":""},{"part":"ZCAT1730-0730A-BK","description":"Split Core Ferrite, 7 mm, 10 MHz, 500 MHz, 80 ohm, ZCAT Series","qty":"2","serial":""},{"part":"ZCAT2035-0930A","description":"Split Core Ferrite, 9 mm, 10 MHz, 500 MHz, 50 ohm, ZCAT Series","qty":"2","serial":""},{"part":"ZCAT2235-1030A","description":"Split Core Ferrite, 10 mm, 10 MHz, 500 MHz, 100 ohm, ZCAT Series","qty":"2","serial":""},{"part":"ZCAT2436-1330A","description":"Split Core Ferrite, 13 mm, 30 ohm, ZCAT Series","qty":"2","serial":""}]}]},{"id":"layout1","name":"RF Layout 2 - Calibration","title":"RF EQUIPMENT STORAGE LOCATION \u0026 LAYOUT","subtitle":"Location : RF Room CUPBOARD S1-1 / S1-2 CALIBRATION KITS 2 / 4","blocks":[{"location":"SMA Calibration Kit - Male box Cupboard S1-2","entries":[{"part":"N/A","description":"SMA Calibration Kit - Male Short Type","qty":"2","serial":""},{"part":"N/A","description":"SMA Calibration Kit - Male Open Type","qty":"2","serial":""},{"part":"N/A","description":"SMA Calibration Kit - Male Load Type","qty":"2","serial":""},{"part":"N/A","description":"SMA Calibration Kit - Male to Male Adapter type","qty":"2","serial":""}]},{"location":"SMA Calibration Kit - Female box Cupboard S1-2","entries":[{"part":"N/A","description":"SMA Calibration Kit - Female Short Type","qty":"2","serial":""},{"part":"N/A","description":"SMA Calibration Kit - Female Open Type","qty":"2","serial":""},{"part":"N/A","description":"SMA Calibration Kit - Female Load Type","qty":"2","serial":""},{"part":"N/A","description":"SMA Calibration Kit - Female to Female Adapter type","qty":"2","serial":""}]},{"location":"SMA Calibration Kit - N Type Female box Cupboard S1-2","entries":[{"part":"N/A","description":"N type Calibration kit - Female Open Type","qty":"2","serial":""},{"part":"N/A","description":"N type Calibration kit - Female Short Type","qty":"2","serial":""},{"part":"N/A","description":"N type Calibration kit - Female Load Type","qty":"2","serial":""},{"part":"N/A","description":"N type Calibration kit - Female to Female Type","qty":"2","serial":""}]},{"location":"N Type Calibration Kit - Female box Cupboard S1-2","entries":[{"part":"N/A","description":"N type Calibration kit - Male Open Type","qty":"2","serial":""},{"part":"N/A","description":"N type Calibration kit - Male Short Type","qty":"2","serial":""},{"part":"N/A","description":"N type Calibration kit - Male Load Type","qty":"2","serial":""},{"part":"N/A","description":"N type Calibration kit - Male to MaleType","qty":"2","serial":""}]},{"location":"N type Calibration Kit - Male box Cupboard S1-2","entries":[{"part":"N/A","description":"N Type Calibration Kit - Male Short Type","qty":"1","serial":""}]},{"location":"N type Calibration Kit - Male box","entries":[{"part":"N/A","description":"N Type Calibration Kit - Male Open Type","qty":"1","serial":""},{"part":"N/A","description":"N Type Calibration Kit - Male Load Type","qty":"1","serial":""},{"part":"N/A","description":"N Type Calibration Kit - Male to Male Adapter type","qty":"1","serial":""}]},{"location":"N type Calibration Kit - Female box Cupboard S1-2","entries":[{"part":"N/A","description":"N type Calibration Kit - Female Short Type","qty":"1","serial":""},{"part":"N/A","description":"N type Calibration Kit - Female Open Type","qty":"1","serial":""},{"part":"N/A","description":"N type Calibration Kit - Female Load Type","qty":"1","serial":""},{"part":"N/A","description":"N type Calibration Kit - Female to Female Adapter type","qty":"1","serial":""}]},{"location":"Cupboard S1-1","entries":[{"part":"TBWA2/40db","description":"EMC Near-field Probe Set with 40 dB Wideband Amplifier","qty":"1","serial":""},{"part":"N/A","description":"POWER SPLITTER 500-6000 Mhz","qty":"1","serial":""}]}]},{"id":"layout2","name":"RF Layout 3 - cupboard 2 and Ch","title":"RF EQUIPMENT STORAGE LOCATION \u0026 LAYOUT","subtitle":"Location : RF Room CUPBOARD S1-2 / S2-2 CHAMBER ROOM 3 / 4","blocks":[{"location":"Cupboard S2-2","entries":[{"part":"ET5410A+","description":"East Tester ET5410A+ Single - Chanel Programmable DC Electronic Load","qty":"3","serial":""},{"part":"72-13350","description":"Multicomp Pro 72-13350 Programmable Dc Power Supply","qty":"1","serial":""}]},{"location":"Cupboard S1-2","entries":[{"part":"KC901V","description":"KC901V Handheld Network Analyzer","qty":"1","serial":"21322574"},{"part":"KC901V","description":"KC901V Handheld Network Analyzer","qty":"1","serial":"21322572"},{"part":"KC901V","description":"KC901V Handheld Network Analyzer","qty":"1","serial":"21322673"},{"part":"KC901V","description":"KC901V Handheld Network Analyzer","qty":"1","serial":"21322675"}]},{"location":"Chamber room no. 01","entries":[{"part":"RF Explorer 6G WB PLUS","description":"RF Explorer 6G WB PLUS","qty":"1","serial":"BJB9J"},{"part":"RF Explorer 6G WB PLUS","description":"RF Explorer 6G WB PLUS","qty":"1","serial":"EC3ML"},{"part":"RF Explorer 6G WB PLUS","description":"RF Explorer 6G WB PLUS","qty":"1","serial":"J7KK9"},{"part":"RF Explorer 6G WB PLUS","description":"RF Explorer 6G WB PLUS","qty":"1","serial":"3E349"},{"part":"RF Explorer 6G WB PLUS","description":"RF Explorer 6G WB PLUS","qty":"1","serial":"83394"},{"part":"RF Explorer 6G WB PLUS","description":"RF Explorer 6G WB PLUS","qty":"1","serial":"5C69A"},{"part":"RF Explorer 6G WB PLUS","description":"RF Explorer 6G WB PLUS","qty":"1","serial":"JDA65"},{"part":"RF Explorer 6G WB PLUS","description":"RF Explorer 6G WB PLUS","qty":"1","serial":"833CK"},{"part":"RF Explorer 6G WB PLUS","description":"RF Explorer 6G WB PLUS","qty":"1","serial":"D57KL"},{"part":"RF Explorer 6G WB PLUS","description":"RF Explorer 6G WB PLUS","qty":"1","serial":"EA7LC"},{"part":"RF Explorer 6G WB PLUS","description":"RF Explorer 6G WB PLUS","qty":"1","serial":"DM77C"},{"part":"RF Explorer 6G WB PLUS","description":"RF Explorer 6G WB PLUS","qty":"1","serial":"7E579"},{"part":"RF Explorer 6G WB PLUS","description":"RF Explorer 6G WB PLUS","qty":"1","serial":"MKB6J"},{"part":"RF Explorer 6G WB PLUS","description":"RF Explorer 6G WB PLUS","qty":"1","serial":"EKAKK"},{"part":"RF Explorer 6G WB PLUS","description":"RF Explorer 6G WB PLUS","qty":"1","serial":"9C8BD"},{"part":"RF Explorer 6G WB PLUS","description":"RF Explorer 6G WB PLUS","qty":"1","serial":"LJC4B"}]},{"location":"Cupboard S1-2(Spoiled)","entries":[{"part":"RF Explorer 6G WB PLUS","description":"RF Explorer 6G WB PLUS","qty":"1","serial":"7DL63"}]}]},{"id":"layout3","name":"RF Layout 4 - Shelves","title":"RF EQUIPMENT STORAGE LOCATION \u0026 LAYOUT","subtitle":"Location : RF Room SHELVES 1 2 HARD CASES WAITING AREA 4 / 4","blocks":[{"location":"Hard Case Orange Waiting area to keep.","entries":[{"part":"WTF100-8-E5 (WTF100-8)","description":"RF Termination Load / Dummy Load","qty":"8","serial":""},{"part":"DL-50W-3G-NJ","description":"RF Termination Load / Dummy Load","qty":"3","serial":""},{"part":"WDTS100-50-8-B","description":"RF High Power Coaxial Fixed Attenuator","qty":"1","serial":""},{"part":"N-JK-100W-3G","description":"100W N-JK Coaxial Fixed Attenuator 3DB DC-3GHz","qty":"1","serial":""}]},{"location":"Hard Case Logistics stock area","entries":[{"part":"SAS-542 (P/N: 2052-2)","description":"Folding Biconical Antenna","qty":"1","serial":""},{"part":"PAM-0202","description":"RF Broadband Preamplifier","qty":"1","serial":""}]},{"location":"Waiting area to keep.","entries":[{"part":"UNI-T UTi260B","description":"Heavy Duty Thermal Camera","qty":"1","serial":""},{"part":"N/A","description":"EMI Shielding Fabric","qty":"2","serial":""}]},{"location":"Shelf level 2","entries":[{"part":"FLUKE-301A+/CN","description":"FLUKE 301E CLAMP METER","qty":"1","serial":"72900309WS"},{"part":"1136-501","description":"Waterproof Digital Caliper insize code 1136-501","qty":"1","serial":"1606251916"},{"part":"17B MAX","description":"Fluke 17B MAX Digital Multimeter","qty":"1","serial":"72900578WS"},{"part":"UT372","description":"Digital tachometer, 5-digit, USB","qty":"1","serial":"243730071"},{"part":"UT204+","description":"Digital Clamp Meter UNI-T UT204+","qty":"1","serial":"N/A"},{"part":"UT204","description":"Clamp Meter Digital UNI-T UT204","qty":"1","serial":"N/A"},{"part":"1108-150","description":"DIGITAL CALIPERS (STANDARD TYPE) (1108-150)","qty":"1","serial":"1912244659"},{"part":"1108-150","description":"DIGITAL CALIPERS (STANDARD TYPE) (1108-150)","qty":"1","serial":"1912244662"},{"part":"DL91150","description":"DL91150 Stainless Steel Digital Vernier Caliper 6 (DELI)","qty":"1","serial":"N/A"},{"part":"KWS-AC300","description":"Universal SOCKET Power Strip","qty":"1","serial":"N/A"},{"part":"PT-D450","description":"Brother P-Touch","qty":"1","serial":"E76465A2Z830448"},{"part":"N/A","description":"Wire Terminal Box Single Phase 2-in 4out","qty":"4","serial":""},{"part":"N/A","description":"Wire Terminal Box Single Phase 2-in 6out","qty":"3","serial":""},{"part":"N/A","description":"Wire Terminal Box Single Phase 2-in 8out","qty":"3","serial":""}]},{"location":"Shelf level 1","entries":[{"part":"N/A","description":"ORCA","qty":"2","serial":""},{"part":"N/A","description":"I.N.C.A","qty":"2","serial":""},{"part":"N/A","description":"Tsushima","qty":"2","serial":""},{"part":"N/A","description":"Deli","qty":"1","serial":""},{"part":"ARC-12","description":"lularAluminium","qty":"1","serial":""},{"part":"KKP90573","description":"Measuring tape KINGKONG PRO 2CM","qty":"1","serial":""},{"part":"HiLock-19","description":"Measuring tape Tajima 5 m","qty":"1","serial":""},{"part":"KKP1004M","description":"KINGKONGGIANT PRO","qty":"1","serial":""},{"part":"N/A","description":"GUANGFA","qty":"1","serial":""},{"part":"N/A","description":"Eagle One","qty":"1","serial":""},{"part":"176-5569","description":"RS PRO 43 mm Spirit Level","qty":"1","serial":""},{"part":"DLI-0014","description":"Deli Barcode Scanner S221","qty":"1","serial":""}]}]}];
+
+const STATUS = {
+  available:   { label:'Available',     cls:'available' },
+  borrowed:    { label:'Borrowed',      cls:'borrowed' },
+  unavailable: { label:'Unavailable',   cls:'unavailable' },
+  active:      { label:'On loan',       cls:'active' },
+  overdue:     { label:'Overdue',       cls:'overdue' },
+  returned:    { label:'Returned',      cls:'returned' },
+  soon:        { label:'Due soon',      cls:'soon' },
+  scheduled:   { label:'Scheduled',     cls:'scheduled' }
+};
+const DEFAULT_CATEGORIES = ['Accessory','Equipment','Instrument','Other'];
+const DUE_SOON_DAYS = 3;
+const CAL_SOON_DAYS = 60;
+const PAGE_SIZE = 16; // 4 columns x 4 rows
+
+const $  = (sel, root=document) => root.querySelector(sel);
+const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const nl2br = (v) => esc(v).replace(/\n/g,'<br />');
+/* Some master-list rows have "N/A" in the name/part-no columns but a useful
+   description. Prefer that description in every visible label. */
+const isNA = (v) => { const s = String(v ?? '').trim(); return !s || /^(n\s*\/?\s*a|na|-)$/i.test(s); };
+const displayName = (item) => {
+  if(!item) return '';
+  if(!isNA(item.name)) return item.name;
+  if(!isNA(item.description)) return item.description;
+  return item.name || 'Unnamed item';
+};
+const displaySku = (item) => (item && !isNA(item.sku)) ? item.sku : '';
+const displayTxName = (tx) => {
+  if(!tx) return '';
+  const item = Store.state.items.find(i => i.id === tx.itemId);
+  return item ? displayName(item) : (isNA(tx.itemName) ? 'Unnamed item' : tx.itemName);
+};
+const uid = (p='id') => p + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+const isoDate = (d) => [d.getFullYear(), String(d.getMonth()+1).padStart(2,'0'), String(d.getDate()).padStart(2,'0')].join('-');
+const todayISO = () => isoDate(new Date());
+const dOff = (n) => { const d = new Date(); d.setDate(d.getDate()+n); return isoDate(d); };
+const parseISO = (s) => { if(!s) return null; const d = new Date(s + 'T00:00:00'); return isNaN(d) ? null : d; };
+const diffDays = (a, b) => Math.round((parseISO(a) - parseISO(b)) / 86400000);
+const fmtDate = (s) => { const d = parseISO(s); return d ? d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}) : '—'; };
+/* Excel writes long numeric S/Ns as "2.1322574E7". Expand them without losing
+   digits (string shift, not float maths). Alphanumeric IDs such as 3E349 are kept. */
+function expandSci(v){
+  const s = String(v ?? '').trim();
+  const m = s.match(/^([+-]?)(\d+(?:\.\d+)?)[Ee]([+-]?\d+)$/);
+  if(m){
+    const exp = parseInt(m[3],10);
+    if(exp >= 1 && exp <= 20){
+      const parts = m[2].split('.');
+      const digits = parts[0] + (parts[1] || '');
+      const pos = parts[0].length + exp;
+      const full = pos >= digits.length ? digits + '0'.repeat(pos - digits.length) : digits.slice(0,pos);
+      return m[1] + full;
+    }
+  }
+  return s.replace(/^(\d+)\.0+$/, '$1');
+}
+
+function dueLabel(tx){
+  if (tx.returnDate) return 'Returned ' + fmtDate(tx.returnDate);
+  const n = diffDays(tx.dueDate, todayISO());
+  if (n < 0)  return Math.abs(n) + ' day(s) overdue';
+  if (n === 0) return 'Due today';
+  if (n === 1) return 'Due tomorrow';
+  return 'Due in ' + n + ' days';
+}
+function txStatus(tx){
+  if (tx.returnDate) return 'returned';
+  if (tx.dueDate && diffDays(tx.dueDate, todayISO()) < 0) return 'overdue';
+  const n = tx.dueDate ? diffDays(tx.dueDate, todayISO()) : 99;
+  return n <= DUE_SOON_DAYS ? 'soon' : 'active';
+}
+function itemStatus(item){
+  if (!item.enabled) return 'unavailable';
+  return ((item.quantity||0) - (item.available||0)) > 0 ? 'borrowed' : 'available';
+}
+function calStatus(item){
+  if (!item.nextCal) return null;
+  const n = diffDays(item.nextCal, todayISO());
+  if (n < 0) return 'overdue';
+  if (n <= CAL_SOON_DAYS) return 'soon';
+  return 'scheduled';
+}
+function badge(key, text){
+  const s = STATUS[key] || {label:key, cls:''};
+  return '<span class="badge ' + s.cls + '">' + esc(text || s.label) + '</span>';
+}
+function toast(msg, kind=''){
+  const el = document.createElement('div');
+  el.className = 'toast ' + kind;
+  el.textContent = msg;
+  $('#toast-root').appendChild(el);
+  setTimeout(() => { el.style.opacity='0'; el.style.transform='translateX(16px)'; setTimeout(()=>el.remove(),220); }, 2800);
+}
+const ICON = {
+  box:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 9l9-5 9 5-9 5-9-5z"/><path d="M3 9v6l9 5 9-5V9"/></svg>',
+  search:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>',
+  empty:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 9l9-5 9 5-9 5-9-5z"/><path d="M3 9v6l9 5 9-5V9"/></svg>',
+  plus:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+  edit:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg>',
+  trash:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>'
+};
+
+/* ==========================================================================
+   2. DATA LAYER  (swap this object for a real API later)
+   ========================================================================== */
+function seedState(){
+  return {
+    items: JSON.parse(JSON.stringify(EXCEL_EQUIPMENT)).map(i => ({
+      ...i,
+      sku: expandSci(i.sku), serial: expandSci(i.serial), certNo: expandSci(i.certNo),
+      quantity: Number(i.quantity) || 1,
+      available: Number.isFinite(Number(i.available)) ? Number(i.available) : (Number(i.quantity) || 1),
+      enabled: i.enabled !== false
+    })),
+    transactions: [],
+    role: 'borrower',
+    userName: 'Guest User',
+    invTab: 'items',
+    filters: {}
+  };
+}
+
+const DataLayer = {
+  KEY:'asset-lend-rf.v1',
+
+  load(){
+    try{
+      const raw = localStorage.getItem(this.KEY);
+      if(raw){
+        const s = JSON.parse(raw);
+        if(Array.isArray(s.items) && Array.isArray(s.transactions)) return s;
+      }
+    }catch(e){ console.warn('load failed', e); }
+    return seedState();
+  },
+  save(state){
+    try{ localStorage.setItem(this.KEY, JSON.stringify(state)); }
+    catch(e){ console.warn('save failed', e); }
+  },
+
+  parseCSV(text){
+    text = String(text || '').replace(/^\uFEFF/,'');
+    const head = text.split(/\r?\n/)[0] || '';
+    const delim = [',',';','\t'].sort((a,b)=> (head.split(b).length - head.split(a).length))[0];
+    const rows=[]; let row=[], field='', quoted=false;
+    for(let i=0;i<text.length;i++){
+      const c = text[i];
+      if(quoted){
+        if(c === '"'){ if(text[i+1] === '"'){ field += '"'; i++; } else quoted=false; }
+        else field += c;
+      }else{
+        if(c === '"') quoted = true;
+        else if(c === delim){ row.push(field.trim()); field=''; }
+        else if(c === '\n'){ row.push(field.trim()); field=''; if(row.some(v=>v!=='')) rows.push(row); row=[]; }
+        else if(c !== '\r') field += c;
+      }
+    }
+    row.push(field.trim());
+    if(row.some(v=>v!=='')) rows.push(row);
+    return rows;
+  },
+  normalize(s){ return String(s||'').toLowerCase().replace(/[\s_\-./()]/g,''); },
+  pick(row, aliases){
+    const keys = Object.keys(row);
+    for(const a of aliases){
+      const target = this.normalize(a);
+      const hit = keys.find(k => this.normalize(k) === target);
+      if(hit !== undefined && row[hit] !== '') return row[hit];
+    }
+    return '';
+  },
+  toDate(v){
+    v = String(v||'').trim();
+    if(!v) return '';
+    if(/^\d+(\.\d+)?$/.test(v)){
+      return isoDate(new Date(Date.UTC(1899,11,30) + Number(v)*86400000));
+    }
+    let m = v.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if(m) return m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0');
+    m = v.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})/);
+    if(m) return m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');
+    return v;
+  },
+  toBool(v, def=true){
+    const s = this.normalize(v);
+    if(!s) return def;
+    if(['false','0','no','off','disabled','unavailable'].includes(s)) return false;
+    return true;
+  },
+
+  /* Rows with a date become loans; the rest become inventory items. */
+  importCSV(text){
+    const rows = this.parseCSV(text);
+    if(rows.length < 2) return {items:0, txs:0};
+    const head = rows[0];
+    const objRows = rows.slice(1).map(cells => {
+      const o = {};
+      head.forEach((h,i)=> o[h] = cells[i] || '');
+      return o;
+    });
+    const items=[], txs=[];
+    objRows.forEach(r=>{
+      const borrowDate = this.toDate(this.pick(r,['borrow date','borrowed date','borrowdate','date borrowed']));
+      const dueDate    = this.toDate(this.pick(r,['due date','returndue','duedate','date due']));
+      if(borrowDate || dueDate){
+        txs.push({
+          id:uid('t'), itemId:'',
+          itemName: this.pick(r,['item','item name','asset','equipment']) || 'Imported item',
+          borrower: this.pick(r,['borrower','user','who']) || 'Unknown',
+          qty: Math.max(1, parseInt(this.pick(r,['qty','quantity','amount']),10) || 1),
+          borrowDate: borrowDate || dueDate || todayISO(),
+          dueDate: dueDate || borrowDate || todayISO(),
+          returnDate: this.toDate(this.pick(r,['return date','returned date','returndate'])) || null,
+          condition: this.pick(r,['condition']),
+          notes: this.pick(r,['notes','note','remark'])
+        });
+      }else{
+        const desc = this.pick(r,['description','detail']);
+        const rawName = this.pick(r,['name','item name','equipment name','equipment','item']);
+        const name = isNA(rawName) && !isNA(desc) ? desc : (rawName || desc);
+        if(!name) return;
+        const quantity = Math.max(1, parseInt(this.pick(r,['quantity','qty','total','amount']),10) || 1);
+        const availRaw = parseInt(this.pick(r,['available','remaining','balance','in stock']),10);
+        items.push({
+          id:uid('i'), name, sku:expandSci(this.pick(r,['model/part no.','model','part no','sku'])),
+          category: this.pick(r,['category','type','group']) || 'Other',
+          description: desc,
+          quantity,
+          available: isNaN(availRaw) ? quantity : Math.min(quantity, Math.max(0,availRaw)),
+          location: this.pick(r,['storage location','location','place','storage']),
+          conditions: this.pick(r,['storage conditions','conditions']),
+          serial: expandSci(this.pick(r,['serial number (s/n)','serial','s/n'])),
+          certNo: expandSci(this.pick(r,['calibration certificate no.','cert no'])),
+          lastCal: this.toDate(this.pick(r,['last calibration date','last cal date'])),
+          nextCal: this.toDate(this.pick(r,['next calibration date','next cal date'])),
+          calInterval: this.pick(r,['calibration interval','interval']),
+          remarks: this.pick(r,['remarks','remark']),
+          link: this.pick(r,['product link','link']),
+          enabled: this.toBool(this.pick(r,['enabled','active','status']))
+        });
+      }
+    });
+    return {items, txs};
+  }
+};
+
+/* ==========================================================================
+   3. STATE / STORE
+   ========================================================================== */
+const Store = {
+  state: DataLayer.load(),
+  init(){
+    this.state.role ||= 'borrower';
+    this.state.userName ||= 'Guest User';
+    this.state.invTab ||= 'items';
+    this.state.filters ||= {};
+    const f = this.state.filters;
+    f.q ||= ''; f.category ||= 'all'; f.status ||= 'all'; f.page ||= 1;
+    f.hq ||= ''; f.hstatus ||= 'all'; f.from ||= ''; f.to ||= '';
+    f.layoutQ ||= '';
+    f.layoutSheet ||= (EXCEL_LAYOUT[0] && EXCEL_LAYOUT[0].id) || '';
+    if(!EXCEL_LAYOUT.some(s => s.id === f.layoutSheet)) f.layoutSheet = EXCEL_LAYOUT[0] ? EXCEL_LAYOUT[0].id : '';
+    /* Migrate data saved before the S/N and availability fixes. */
+    let fixed = false;
+    this.state.items.forEach(i => {
+      ['sku','serial','certNo'].forEach(k => {
+        const v = expandSci(i[k]);
+        if(v !== i[k]){ i[k] = v; fixed = true; }
+      });
+      if(/plan to purchase/i.test(String(i.location || ''))){
+        i.location = 'Unavailable';
+        i.enabled = false;
+        i.needPurchase = true;
+        fixed = true;
+      }
+      if(i.enabled === false && String(i.location) === 'Unavailable'){
+        if(!i.needPurchase){ i.needPurchase = true; fixed = true; }
+        if(Number(i.available) !== 0){ i.available = 0; fixed = true; }
+      }
+    });
+    if(fixed) this.save();
+  },
+  save(){ DataLayer.save(this.state); },
+  commit(msg, kind){
+    this.save();
+    render();
+    if(msg) toast(msg, kind);
+  }
+};
+Store.init();
+
+const getItems = () => {
+  const f = Store.state.filters, q = f.q.trim().toLowerCase();
+  return Store.state.items.filter(i => {
+    if(f.category !== 'all' && i.category !== f.category) return false;
+    if(f.status !== 'all' && itemStatus(i) !== f.status) return false;
+    if(q && !(displayName(i)+' '+i.name+' '+i.description+' '+i.category+' '+i.sku+' '+(i.location||'')).toLowerCase().includes(q)) return false;
+    return true;
+  });
+};
+const getTransactions = () => {
+  const f = Store.state.filters, q = f.hq.trim().toLowerCase();
+  return Store.state.transactions.filter(t => {
+    if(f.hstatus === 'due'){ if(!['overdue','soon'].includes(txStatus(t))) return false; }
+    else if(f.hstatus !== 'all' && txStatus(t) !== f.hstatus) return false;
+    if(f.from && t.borrowDate < f.from) return false;
+    if(f.to && t.borrowDate > f.to) return false;
+    if(q && !(displayTxName(t)+' '+t.itemName+' '+t.borrower+' '+(t.notes||'')).toLowerCase().includes(q)) return false;
+    return true;
+  }).sort((a,b)=> (b.borrowDate||'').localeCompare(a.borrowDate||''));
+};
+
+/* ==========================================================================
+   4. COMPONENTS (pure render helpers)
+   ========================================================================== */
+const UI = {
+  kpi(cls, icon, num, label, foot){
+    return `<div class="card kpi ${cls}">
+      <div class="kpi-top"><div class="kpi-ico">${icon}</div></div>
+      <div class="kpi-num">${num}</div><div class="kpi-label">${label}</div>
+      <div class="kpi-foot">${foot}</div>
+    </div>`;
+  },
+  itemCard(item){
+    const st = itemStatus(item);
+    const name = displayName(item), sku = displaySku(item);
+    const borrowed = Math.max(0, (item.quantity||0) - (item.available||0));
+    const isAdmin = Store.state.role === 'admin';
+    const activeTxs = Store.state.transactions.filter(t => t.itemId === item.id && !t.returnDate);
+    /* An item can have several active loans: prefer the current user's loan
+       so the Return button stays reachable for borrowers. */
+    const activeTx = isAdmin
+      ? activeTxs[0]
+      : activeTxs.find(t => t.borrower === Store.state.userName) || activeTxs[0];
+    const canReturn = activeTx && (isAdmin || activeTx.borrower === Store.state.userName);
+    return `<article class="card item-card">
+      <div class="row between">
+        <div class="item-ico">${ICON.box}</div>
+        ${badge(st)}
+      </div>
+      <div>
+        <div class="item-name" title="${esc(name)}">${esc(name)}</div>
+        <div class="item-cat">${esc(item.category || 'Uncategorised')}${sku ? ' • '+esc(sku) : ''}</div>
+      </div>
+      ${item.needPurchase
+        ? `<div class="item-qty"><b>0 / ${esc(item.quantity)}</b> to purchase</div>`
+        : `<div class="item-qty">In stock <b>${esc(item.available)}</b> / ${esc(item.quantity)}${borrowed ? ' • '+borrowed+' on loan' : ''}</div>`}
+      <div class="small muted">${item.location ? nl2br(item.location) : 'No location recorded'}</div>
+      ${activeTx ? `<div class="small">Borrower: <span class="strong">${esc(activeTx.borrower)}</span> • ${esc(dueLabel(activeTx))}</div>` : ''}
+      <div class="item-foot">
+        ${item.enabled && item.available > 0 ? `<button class="btn primary sm" data-action="borrow" data-id="${esc(item.id)}">Borrow</button>` : ''}
+        ${canReturn ? `<button class="btn ok sm" data-action="return" data-id="${esc(activeTx.id)}">Return</button>` : ''}
+        <button class="btn sm" data-action="detail" data-id="${esc(item.id)}">Details</button>
+      </div>
+    </article>`;
+  },
+  txRow(tx, compact=false){
+    const st = txStatus(tx);
+    const canReturn = !tx.returnDate && (Store.state.role === 'admin' || tx.borrower === Store.state.userName);
+    return `<tr>
+      <td><div class="strong">${esc(displayTxName(tx))}</div>${!compact ? '<div class="tiny muted">'+esc(tx.notes||'')+'</div>' : ''}</td>
+      ${compact ? '' : `<td>${esc(tx.borrower)}</td>`}
+      <td>${esc(tx.qty)}</td>
+      <td>${fmtDate(tx.borrowDate)}</td>
+      <td>${fmtDate(tx.dueDate)}</td>
+      <td>${tx.returnDate ? fmtDate(tx.returnDate) : '<span class="muted">—</span>'}</td>
+      <td>${badge(st)}</td>
+      <td>${canReturn ? `<button class="btn ok sm" data-action="return" data-id="${esc(tx.id)}">Accept return</button>` : `<button class="btn ghost sm" data-action="tx-detail" data-id="${esc(tx.id)}">View</button>`}</td>
+    </tr>`;
+  },
+  modal(title, body, foot){
+    return `<div class="backdrop" data-action="backdrop">
+      <div class="modal" role="dialog" aria-modal="true">
+        <div class="modal-head"><h3 class="modal-title">${title}</h3></div>
+        <div class="modal-body">${body}</div>
+        ${foot ? `<div class="modal-foot">${foot}</div>` : ''}
+      </div>
+    </div>`;
+  }
+};
+
+/* ==========================================================================
+   5. VIEWS
+   ========================================================================== */
+const Views = {
+  dashboard(){
+    const items = Store.state.items, txs = Store.state.transactions;
+    const active   = txs.filter(t => !t.returnDate);
+    const returned = txs.filter(t =>  t.returnDate);
+    const overdue  = txs.filter(t => txStatus(t) === 'overdue');
+    const totalQty = items.reduce((s,i)=> s + (i.quantity||0), 0);
+    const availQty = items.reduce((s,i)=> s + (i.available||0), 0);
+
+    const byCat = {};
+    txs.forEach(t => {
+      const it = items.find(i => i.id === t.itemId);
+      const c = it ? it.category : 'Other';
+      byCat[c] = (byCat[c] || 0) + Number(t.qty || 1);
+    });
+    const cats = Object.entries(byCat).sort((a,b)=>b[1]-a[1]).slice(0,5);
+    const maxCat = Math.max(1, ...cats.map(c=>c[1]));
+    const bars = cats.length
+      ? cats.map(([name,val]) => `<div class="bar-row">
+          <div class="bar-name" title="${esc(name)}">${esc(name)}</div>
+          <div class="bar-track"><i class="bar-fill" style="width:${Math.round(val/maxCat*100)}%"></i></div>
+          <div class="bar-val">${val}</div>
+        </div>`).join('')
+      : '<div class="empty">'+ICON.empty+'<div>No loans recorded yet. Borrowed units will appear here.</div></div>';
+
+    const invByCat = [...new Set(items.map(i=>i.category))].sort().map(c => {
+      const list = items.filter(i=>i.category===c);
+      const ok = list.filter(i=>itemStatus(i)==='available').length;
+      return `<div class="mini-stat"><span>${esc(c)}</span><span class="small"><b>${ok}</b> / ${list.length} available</span></div>`;
+    }).join('') || '<div class="empty">No inventory items</div>';
+
+    const alerts = txs.filter(t => ['overdue','soon'].includes(txStatus(t)))
+      .sort((a,b)=> (a.dueDate||'').localeCompare(b.dueDate||''));
+    const alertHTML = alerts.length ? alerts.slice(0,6).map(t => `
+      <div class="alert-item">
+        <span class="alert-dot" style="background:${txStatus(t)==='overdue'?'#b91c1c':'#f59e0b'}"></span>
+        <div class="alert-main">
+          <div class="alert-name">${esc(displayTxName(t))}</div>
+          <div class="alert-meta">${esc(t.borrower)} • ${esc(dueLabel(t))} • ${badge(txStatus(t))}</div>
+        </div>
+        <div class="alert-actions">
+          <button class="btn sm" data-action="tx-detail" data-id="${esc(t.id)}">Details</button>
+          ${Store.state.role==='admin' || t.borrower===Store.state.userName ? `<button class="btn ok sm" data-action="return" data-id="${esc(t.id)}">Accept return</button>` : ''}
+        </div>
+      </div>`).join('') : '<div class="empty">No loans due soon or overdue 🎉</div>';
+
+    const calList = items.filter(i=>i.nextCal).sort((a,b)=>a.nextCal.localeCompare(b.nextCal)).slice(0,6);
+    const calHTML = calList.length ? calList.map(i => `
+      <div class="alert-item">
+        <span class="alert-dot" style="background:${calStatus(i)==='overdue'?'#b91c1c':calStatus(i)==='soon'?'#f59e0b':'#6366f1'}"></span>
+        <div class="alert-main">
+          <div class="alert-name">${esc(displayName(i))}</div>
+          <div class="alert-meta">Next calibration ${fmtDate(i.nextCal)} • ${esc(i.serial || displaySku(i) || '')}</div>
+        </div>
+        ${badge(calStatus(i))}
+      </div>`).join('') : '<div class="empty">No calibration dates in the source data</div>';
+
+    const recent = [...txs].sort((a,b)=>(b.borrowDate||'').localeCompare(a.borrowDate||'')).slice(0,6)
+      .map(t=>UI.txRow(t,true)).join('');
+
+    return `
+      <div class="page-head">
+        <div><h1 class="page-title">Dashboard</h1><p class="page-desc">Lending overview as of ${fmtDate(todayISO())} • ${items.length} assets from the RF equipment workbook</p></div>
+        <a href="#items" class="btn primary">${ICON.plus} New loan</a>
+      </div>
+      <div class="kpi-grid">
+        ${UI.kpi('a','<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-5 9 5-9 5-9-5z"/><path d="M3 9v6l9 5 9-5V9"/></svg>', items.length, 'Total items', totalQty+' units • '+availQty+' in stock')}
+        ${UI.kpi('b','<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 20h16"/></svg>', active.length, 'Currently borrowed', active.length+' loan(s) awaiting return')}
+        ${UI.kpi('c','<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg>', returned.length, 'Returned', returned.length+' closed record(s)')}
+        ${UI.kpi('d','<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 8v5M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg>', overdue.length, 'Overdue loans', overdue.length+' need follow-up')}
+      </div>
+      <div class="dash-grid">
+        <section class="card">
+          <div class="card-head"><div><h3 class="card-title">Borrowing by category</h3><p class="card-sub">Units borrowed, all time</p></div></div>
+          <div class="pad">${bars}</div>
+        </section>
+        <section class="card">
+          <div class="card-head"><div><h3 class="card-title">Inventory by category</h3><p class="card-sub">Available / total items</p></div></div>
+          <div class="pad">${invByCat}</div>
+        </section>
+      </div>
+      <div class="dash-grid">
+        <section class="card">
+          <div class="card-head"><div><h3 class="card-title">Loan alerts</h3><p class="card-sub">${alerts.length} loan(s) need attention</p></div><span class="badge overdue">${alerts.length}</span></div>
+          ${alertHTML}
+        </section>
+        <section class="card">
+          <div class="card-head"><div><h3 class="card-title">Calibration watchlist</h3><p class="card-sub">Earliest upcoming calibration dates</p></div></div>
+          ${calHTML}
+        </section>
+      </div>
+      <section class="card">
+        <div class="card-head"><div><h3 class="card-title">Recent activity</h3><p class="card-sub">Latest ${Math.min(6,txs.length)} loan record(s)</p></div><a href="#inventory" class="btn ghost sm">View all</a></div>
+        <div class="table-wrap"><table><thead><tr><th>Item</th><th>Qty</th><th>Borrowed</th><th>Due</th><th>Returned</th><th>Status</th><th></th></tr></thead><tbody>${recent || '<tr><td colspan="7" class="empty">No loan history yet — start by borrowing an item.</td></tr>'}</tbody></table></div>
+      </section>`;
+  },
+
+  items(){
+    const f = Store.state.filters;
+    const cats = [...new Set(Store.state.items.map(i=>i.category))].sort();
+    const all = getItems();
+    const pages = Math.max(1, Math.ceil(all.length / PAGE_SIZE));
+    f.page = Math.min(Math.max(1, Number(f.page) || 1), pages);
+    const start = (f.page - 1) * PAGE_SIZE;
+    const list = all.slice(start, start + PAGE_SIZE);
+
+    const nums = [...new Set([1, pages, f.page-1, f.page, f.page+1])]
+      .filter(p => p >= 1 && p <= pages).sort((a,b)=>a-b);
+    let pageBtns = '', prev = 0;
+    nums.forEach(p => {
+      if(prev && p - prev > 1) pageBtns += '<span class="info">…</span>';
+      pageBtns += `<button class="btn sm ${p===f.page?'current':''}" data-action="page" data-page="${p}">${p}</button>`;
+      prev = p;
+    });
+    const pager = pages > 1 ? `<div class="pager">
+      <button class="btn sm" data-action="page" data-page="${f.page-1}" ${f.page===1?'disabled':''}>‹ Prev</button>
+      ${pageBtns}
+      <span class="info">Page ${f.page} of ${pages}</span>
+      <button class="btn sm" data-action="page" data-page="${f.page+1}" ${f.page===pages?'disabled':''}>Next ›</button>
+    </div>` : '';
+
+    return `
+      <div class="page-head">
+        <div><h1 class="page-title">Borrow &amp; Return</h1><p class="page-desc">Search, filter and create borrow / return records</p></div>
+        ${Store.state.role==='admin' ? `<button class="btn primary" data-action="new-item">${ICON.plus} Add item</button>` : ''}
+      </div>
+      <div class="toolbar">
+        <div class="search-box">${ICON.search}<input class="input" id="f-q" placeholder="Search name, part no., category or location..." value="${esc(f.q)}" /></div>
+        <select class="input" id="f-category"><option value="all">All categories</option>${cats.map(c=>`<option value="${esc(c)}" ${f.category===c?'selected':''}>${esc(c)}</option>`).join('')}</select>
+        <select class="input" id="f-status"><option value="all">All statuses</option><option value="available" ${f.status==='available'?'selected':''}>Available</option><option value="borrowed" ${f.status==='borrowed'?'selected':''}>Borrowed</option><option value="unavailable" ${f.status==='unavailable'?'selected':''}>Unavailable</option></select>
+        <span class="small muted">${all.length} item(s) • showing ${all.length ? start+1 : 0}-${Math.min(start+PAGE_SIZE, all.length)}</span>
+      </div>
+      <div class="items-grid">${list.map(UI.itemCard).join('') || '<div class="card empty">'+ICON.empty+'<div>No items match your filters</div></div>'}</div>
+      ${pager}`;
+  },
+
+  inventory(){
+    const s = Store.state, f = s.filters, isAdmin = s.role === 'admin', tab = s.invTab;
+    const list = getTransactions();
+
+    const invTable = `
+      <div class="toolbar">
+        <span class="small muted">${s.items.length} item(s) in inventory</span>
+        <button class="btn sm" data-action="reset-data">Reset to workbook data</button>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Item / Part no.</th><th>Category</th><th>Total</th><th>In stock</th><th>Location</th><th>Status</th><th></th></tr></thead>
+        <tbody>${s.items.map(i=>`<tr>
+          <td><div class="strong">${esc(displayName(i))}</div>${displaySku(i)?'<div class="tiny muted">'+esc(displaySku(i))+'</div>':''}</td>
+          <td>${esc(i.category)}</td><td>${esc(i.quantity)}</td><td>${i.needPurchase ? '0 / '+esc(i.quantity)+' to purchase' : esc(i.available)}</td>
+          <td>${i.location ? nl2br(i.location) : '—'}</td><td>${badge(itemStatus(i))}</td>
+          <td class="row">${isAdmin?`<button class="btn ghost sm icon" data-action="edit-item" data-id="${esc(i.id)}" title="Edit">${ICON.edit}</button><button class="btn ghost sm icon" data-action="delete-item" data-id="${esc(i.id)}" title="Delete">${ICON.trash}</button>`:'<span class="tiny muted">View only</span>'}</td>
+        </tr>`).join('') || '<tr><td colspan="7" class="empty">No items in inventory</td></tr>'}</tbody>
+      </table></div>`;
+
+    const histTable = `
+      <div class="toolbar">
+        <div class="search-box">${ICON.search}<input class="input" id="f-hq" placeholder="Search item or borrower..." value="${esc(f.hq)}" /></div>
+        <select class="input" id="f-hstatus">
+          <option value="all">All statuses</option>
+          <option value="active" ${f.hstatus==='active'?'selected':''}>On loan</option>
+          <option value="soon" ${f.hstatus==='soon'?'selected':''}>Due soon</option>
+          <option value="due" ${f.hstatus==='due'?'selected':''}>Due / overdue</option>
+          <option value="overdue" ${f.hstatus==='overdue'?'selected':''}>Overdue</option>
+          <option value="returned" ${f.hstatus==='returned'?'selected':''}>Returned</option>
+        </select>
+        <input class="input" type="date" id="f-from" value="${esc(f.from)}" title="Borrowed from" style="width:auto" />
+        <input class="input" type="date" id="f-to" value="${esc(f.to)}" title="Borrowed to" style="width:auto" />
+        <span class="small muted">${list.length} record(s)</span>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Item</th><th>Borrower</th><th>Qty</th><th>Borrowed</th><th>Due</th><th>Returned</th><th>Status</th><th></th></tr></thead>
+        <tbody>${list.map(t=>UI.txRow(t)).join('') || '<tr><td colspan="8" class="empty">No loan history matches your filters</td></tr>'}</tbody>
+      </table></div>`;
+
+    return `
+      <div class="page-head">
+        <div><h1 class="page-title">Inventory &amp; History</h1><p class="page-desc">Manage assets and review the full borrow / return log</p></div>
+        ${isAdmin ? `<button class="btn primary" data-action="new-item">${ICON.plus} Add item</button>` : ''}
+      </div>
+      <div class="toolbar"><div class="tabs">
+        <button data-action="inv-tab" data-tab="items" class="${tab==='items'?'active':''}">Inventory</button>
+        <button data-action="inv-tab" data-tab="history" class="${tab==='history'?'active':''}">Loan history</button>
+      </div></div>
+      <section class="card">
+        <div class="card-head"><div><h3 class="card-title">${tab==='items'?'Inventory items':'Full loan history'}</h3><p class="card-sub">${tab==='items'?'Source: RF Equipment - Master List':'Search, filter by status and borrow date'}</p></div></div>
+        <div class="pad" style="padding-top:14px">${tab==='items'?invTable:histTable}</div>
+      </section>`;
+  },
+
+  layout(){
+    const f = Store.state.filters;
+    const sheets = EXCEL_LAYOUT;
+    if(!sheets.length) return '<div class="card empty">No layout sheets found in the workbook</div>';
+    const sheet = sheets.find(s => s.id === f.layoutSheet) || sheets[0];
+    const q = f.layoutQ.trim().toLowerCase();
+    const total = sheet.blocks.reduce((n,b) => n + b.entries.length, 0);
+
+    const tabs = sheets.map((s, idx) => {
+      const count = s.blocks.reduce((n,b) => n + b.entries.length, 0);
+      return `<button class="sheet-tab ${s.id===sheet.id?'active':''}" data-action="layout-sheet" data-sheet="${esc(s.id)}">
+        <span class="sheet-no">${idx+1}</span>
+        <span><span class="sheet-name">${esc(s.name.replace(/^RF Layout\s*/,''))}</span><span class="sheet-meta">${count} entries</span></span>
+      </button>`;
+    }).join('');
+
+    let shown = 0;
+    const blocks = sheet.blocks.map(b => {
+      const entries = b.entries.filter(e => !q || (b.location+' '+e.part+' '+e.description+' '+e.serial).toLowerCase().includes(q));
+      if(!entries.length) return '';
+      shown += entries.length;
+      const cards = entries.map(e => {
+        const hasPart = e.part && e.part !== 'N/A';
+        const match = hasPart ? Store.state.items.find(i => DataLayer.normalize(i.sku) === DataLayer.normalize(e.part)) : null;
+        const chips = [
+          e.qty ? `<span class="layout-chip">Qty: ${esc(e.qty)}</span>` : '<span class="layout-chip noQty">Qty not recorded</span>',
+          e.serial ? `<span class="layout-chip serial">S/N: ${esc(e.serial)}</span>` : '',
+          match ? `<span class="layout-chip match">In inventory</span>` : ''
+        ].filter(Boolean).join('');
+        return `<div class="layout-entry">
+          <div class="layout-part">${hasPart ? esc(e.part) : 'Part no. N/A'}</div>
+          <div class="layout-desc">${esc(e.description || e.part)}</div>
+          <div class="layout-meta">${chips}</div>
+        </div>`;
+      }).join('');
+      return `<section class="card layout-location">
+        <div class="layout-loc-head">
+          <div class="loc-pin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5.5 7-12a7 7 0 10-14 0c0 6.5 7 12 7 12z"/><circle cx="12" cy="9" r="2.5"/></svg></div>
+          <div><div class="layout-loc-name">${esc(b.location)}</div><div class="layout-loc-meta">${entries.length} recorded item(s)</div></div>
+        </div>
+        <div class="layout-entries">${cards}</div>
+      </section>`;
+    }).filter(Boolean).join('');
+
+    return `
+      <div class="page-head">
+        <div><h1 class="page-title">Storage Layout</h1><p class="page-desc">Where equipment is kept, taken from the four RF Layout sheets in the workbook</p></div>
+        <span class="badge scheduled">${shown} / ${total} entries shown</span>
+      </div>
+      <div class="sheet-tabs">${tabs}</div>
+      <div class="toolbar">
+        <div class="search-box">${ICON.search}<input class="input" id="f-lq" placeholder="Search location, part no., description or S/N..." value="${esc(f.layoutQ)}" /></div>
+        <span class="small muted">${esc(sheet.subtitle)}</span>
+      </div>
+      ${blocks || '<div class="card empty">'+ICON.empty+'<div>No layout entries match your search</div></div>'}`;
+  }
+};
+
+/* ==========================================================================
+   6. MODAL FORMS + ACTIONS
+   ========================================================================== */
+function openModal(html){ $('#modal-root').innerHTML = html; document.body.style.overflow='hidden'; }
+function closeModal(){ $('#modal-root').innerHTML=''; document.body.style.overflow=''; }
+
+function borrowModal(itemId){
+  const item = Store.state.items.find(i=>i.id===itemId);
+  if(!item) return toast('Item not found','bad');
+  if(!item.enabled) return toast('This item is unavailable','bad');
+  if(item.available<=0) return toast('All units of this item are on loan','warn');
+  openModal(UI.modal('New loan • '+esc(displayName(item)), `
+    <div class="stack">
+      <div class="row between small"><span class="muted">In stock</span><span class="strong">${item.available} / ${item.quantity}</span></div>
+      <form id="borrow-form" data-form="borrow" data-id="${esc(item.id)}">
+        <div class="form-grid">
+          <div><label class="lbl">Borrower *</label><input class="input" name="borrower" required value="${esc(Store.state.userName==='Guest User'?'':Store.state.userName)}" placeholder="Full name" /></div>
+          <div><label class="lbl">Quantity *</label><input class="input" type="number" name="qty" min="1" max="${item.available}" value="1" required /></div>
+          <div><label class="lbl">Borrow date *</label><input class="input" type="date" name="borrowDate" value="${todayISO()}" required /></div>
+          <div><label class="lbl">Due date *</label><input class="input" type="date" name="dueDate" value="${dOff(7)}" required /></div>
+          <div class="full"><label class="lbl">Notes</label><textarea class="input" name="notes" placeholder="Reason or additional notes"></textarea></div>
+        </div>
+      </form>
+    </div>`, `<button class="btn" data-action="close-modal">Cancel</button><button class="btn primary" data-action="submit-form" data-form-id="borrow-form">Confirm borrow</button>`));
+}
+
+function returnModal(txId){
+  const tx = Store.state.transactions.find(t=>t.id===txId);
+  if(!tx) return toast('Loan record not found','bad');
+  if(tx.returnDate) return toast('This loan is already returned','warn');
+  openModal(UI.modal('Record return • '+esc(displayTxName(tx)), `
+    <div class="detail-list" style="margin-bottom:18px">
+      <dt>Borrower</dt><dd>${esc(tx.borrower)}</dd>
+      <dt>Quantity</dt><dd>${esc(tx.qty)} unit(s)</dd>
+      <dt>Borrowed on</dt><dd>${fmtDate(tx.borrowDate)}</dd>
+      <dt>Due on</dt><dd>${fmtDate(tx.dueDate)} (${esc(dueLabel(tx))})</dd>
+    </div>
+    <form id="return-form" data-form="return" data-id="${esc(tx.id)}">
+      <div class="form-grid">
+        <div><label class="lbl">Actual return date *</label><input class="input" type="date" name="returnDate" value="${todayISO()}" required /></div>
+        <div><label class="lbl">Condition *</label><select class="input" name="condition"><option>Good</option><option>Minor scratches</option><option>Damaged</option></select></div>
+        <div class="full"><label class="lbl">Return notes</label><textarea class="input" name="notes" placeholder="Condition details or additional notes"></textarea></div>
+      </div>
+    </form>`, `<button class="btn" data-action="close-modal">Cancel</button><button class="btn ok" data-action="submit-form" data-form-id="return-form">Confirm return</button>`));
+}
+
+function itemModal(itemId){
+  const item = itemId ? Store.state.items.find(i=>i.id===itemId) : null;
+  const cats = [...new Set([...DEFAULT_CATEGORIES, ...Store.state.items.map(i=>i.category)])].filter(Boolean).sort();
+  openModal(UI.modal(item ? 'Edit item' : 'Add new item', `
+    <form id="item-form" data-form="item" data-id="${item?esc(item.id):''}">
+      <div class="form-grid">
+        <div class="full"><label class="lbl">Item name *</label><input class="input" name="name" required value="${item?esc(displayName(item)):''}" placeholder="e.g. RF Adapter N Male to N Male" /></div>
+        <div><label class="lbl">Category *</label><input class="input" name="category" list="cat-list" value="${item?esc(item.category):'Accessory'}" required /><datalist id="cat-list">${cats.map(c=>`<option value="${esc(c)}"></option>`).join('')}</datalist></div>
+        <div><label class="lbl">Part no. / Model</label><input class="input" name="sku" value="${item?esc(displaySku(item)):''}" /></div>
+        <div><label class="lbl">Storage location</label><input class="input" name="location" value="${item?esc(item.location||''):''}" placeholder="e.g. Cupboard S1-1" /></div>
+        <div><label class="lbl">Total quantity *</label><input class="input" type="number" name="quantity" min="1" required value="${item?item.quantity:1}" /></div>
+        <div><label class="lbl">Quantity in stock *</label><input class="input" type="number" name="available" min="0" required value="${item?item.available:1}" /></div>
+        <div class="full"><label class="lbl">Description</label><textarea class="input" name="description">${item?esc(item.description||''):''}</textarea></div>
+        <div class="full"><label class="row small"><input type="checkbox" name="enabled" ${!item||item.enabled?'checked':''} /> Available for borrowing</label></div>
+      </div>
+    </form>`, `<button class="btn" data-action="close-modal">Cancel</button><button class="btn primary" data-action="submit-form" data-form-id="item-form">Save</button>`));
+}
+
+function detailModal(itemId){
+  const item = Store.state.items.find(i=>i.id===itemId);
+  if(!item) return;
+  const history = Store.state.transactions.filter(t=>t.itemId===itemId)
+    .sort((a,b)=>(b.borrowDate||'').localeCompare(a.borrowDate||'')).slice(0,5);
+  const cal = calStatus(item);
+  openModal(UI.modal(esc(displayName(item)), `
+    <dl class="detail-list">
+      <dt>Category</dt><dd>${esc(item.category||'—')}</dd>
+      <dt>Part no.</dt><dd>${displaySku(item) ? esc(displaySku(item)) : '—'}</dd>
+      <dt>Location</dt><dd>${item.location?nl2br(item.location):'—'}</dd>
+      <dt>Conditions</dt><dd>${esc(item.conditions||'—')}</dd>
+      <dt>In stock</dt><dd>${item.needPurchase ? '0 / '+esc(item.quantity)+' to purchase' : esc(item.available)+' / '+esc(item.quantity)}</dd>
+      <dt>Status</dt><dd>${badge(itemStatus(item))}</dd>
+      <dt>Serial no.</dt><dd>${esc(item.serial||'—')}</dd>
+      <dt>Certificate</dt><dd>${esc(item.certNo||'—')}</dd>
+      <dt>Last calibration</dt><dd>${fmtDate(item.lastCal)}</dd>
+      <dt>Next calibration</dt><dd>${fmtDate(item.nextCal)} ${cal?'• '+badge(cal):''}</dd>
+      <dt>Interval</dt><dd>${esc(item.calInterval||'—')}</dd>
+      <dt>Description</dt><dd>${item.description?nl2br(item.description):'—'}</dd>
+      <dt>Remarks</dt><dd>${item.remarks?nl2br(item.remarks):'—'}</dd>
+      ${item.link?'<dt>Product link</dt><dd><a href="'+esc(item.link)+'" target="_blank" rel="noopener">Open link ↗</a></dd>':''}
+    </dl>
+    <h4 class="small strong" style="margin:20px 0 8px">Recent loans</h4>
+    ${history.length ? history.map(t=>`<div class="row between small" style="padding:7px 0;border-bottom:1px dashed var(--line)"><span>${esc(t.borrower)} • ${fmtDate(t.borrowDate)}</span>${badge(txStatus(t))}</div>`).join('') : '<div class="muted small">No loan history</div>'}
+  `, `<button class="btn" data-action="close-modal">Close</button>`));
+}
+
+function txDetailModal(txId){
+  const t = Store.state.transactions.find(x=>x.id===txId);
+  if(!t) return;
+  openModal(UI.modal('Loan details', `
+    <dl class="detail-list">
+      <dt>Item</dt><dd>${esc(displayTxName(t))}</dd>
+      <dt>Borrower</dt><dd>${esc(t.borrower)}</dd>
+      <dt>Quantity</dt><dd>${esc(t.qty)} unit(s)</dd>
+      <dt>Borrow date</dt><dd>${fmtDate(t.borrowDate)}</dd>
+      <dt>Due date</dt><dd>${fmtDate(t.dueDate)}</dd>
+      <dt>Return date</dt><dd>${t.returnDate?fmtDate(t.returnDate):'Not returned'}</dd>
+      <dt>Status</dt><dd>${badge(txStatus(t))}</dd>
+      <dt>Condition</dt><dd>${esc(t.condition||'—')}</dd>
+      <dt>Notes</dt><dd>${t.notes?nl2br(t.notes):'—'}</dd>
+    </dl>`, `${!t.returnDate && (Store.state.role==='admin'||t.borrower===Store.state.userName) ? `<button class="btn ok" data-action="return" data-id="${esc(t.id)}">Accept return now</button>` : ''}<button class="btn" data-action="close-modal">Close</button>`));
+}
+
+/* --- form handlers --- */
+function handleBorrow(form){
+  const fd = new FormData(form);
+  const item = Store.state.items.find(i=>i.id===form.dataset.id);
+  if(!item) return toast('Item not found','bad');
+  const borrower = String(fd.get('borrower')||'').trim();
+  const qty = parseInt(fd.get('qty'),10);
+  const borrowDate = fd.get('borrowDate'), dueDate = fd.get('dueDate');
+  if(!borrower) return toast('Please enter the borrower name','bad');
+  if(!qty || qty<1) return toast('Invalid quantity','bad');
+  if(qty > item.available) return toast('Quantity exceeds stock ('+item.available+' available)','bad');
+  if(!borrowDate || !dueDate) return toast('Please enter both dates','bad');
+  if(dueDate < borrowDate) return toast('Due date cannot be before the borrow date','bad');
+  item.available -= qty;
+  Store.state.transactions.push({
+    id:uid('t'), itemId:item.id, itemName:displayName(item), borrower, qty,
+    borrowDate, dueDate, returnDate:null, condition:'', notes:String(fd.get('notes')||'').trim()
+  });
+  Store.state.userName = borrower;
+  closeModal();
+  Store.commit(`Borrowed "${displayName(item)}" — ${qty} unit(s)`,'ok');
+}
+function handleReturn(form){
+  const fd = new FormData(form);
+  const tx = Store.state.transactions.find(t=>t.id===form.dataset.id);
+  if(!tx || tx.returnDate) return toast('Loan already returned or not found','bad');
+  const returnDate = fd.get('returnDate') || todayISO();
+  if(returnDate < tx.borrowDate) return toast('Return date cannot be before the borrow date','bad');
+  tx.returnDate = returnDate;
+  tx.condition = fd.get('condition') || 'Good';
+  tx.notes = [tx.notes, String(fd.get('notes')||'').trim()].filter(Boolean).join(' | ');
+  const item = Store.state.items.find(i=>i.id===tx.itemId);
+  if(item) item.available = Math.min(item.quantity, (item.available||0) + Number(tx.qty||0));
+  closeModal();
+  Store.commit(`Returned "${displayTxName(tx)}" successfully`,'ok');
+}
+function handleItem(form){
+  const fd = new FormData(form);
+  const id = form.dataset.id;
+  const name = String(fd.get('name')||'').trim();
+  const quantity = parseInt(fd.get('quantity'),10);
+  let available = parseInt(fd.get('available'),10);
+  if(!name) return toast('Please enter an item name','bad');
+  if(!quantity || quantity<1) return toast('Invalid total quantity','bad');
+  if(isNaN(available) || available<0) available = 0;
+  if(available > quantity) available = quantity;
+  const payload = {
+    name, sku:String(fd.get('sku')||'').trim(),
+    category:String(fd.get('category')||'Other').trim() || 'Other',
+    quantity, available, location:String(fd.get('location')||'').trim(),
+    description:String(fd.get('description')||'').trim(), enabled:fd.get('enabled')==='on'
+  };
+  if(id){
+    const item = Store.state.items.find(i=>i.id===id);
+    if(!item) return;
+    Object.assign(item, payload);
+    Store.commit('Item updated','ok');
+  }else{
+    Store.state.items.push({id:uid('i'), ...payload});
+    Store.commit('Item added','ok');
+  }
+  closeModal();
+}
+
+/* ==========================================================================
+   7. ROUTER + EVENT DELEGATION
+   ========================================================================== */
+const ROUTES = { dashboard:'Dashboard', items:'Borrow & Return', inventory:'Inventory & History', layout:'Storage Layout' };
+function currentRoute(){
+  const h = location.hash.replace('#','');
+  return ROUTES[h] ? h : 'dashboard';
+}
+function render(){
+  const route = currentRoute();
+  $$('.nav-link').forEach(el => el.classList.toggle('active', el.dataset.nav === route));
+  $('#page-title').textContent = ROUTES[route];
+  $('#view').innerHTML = Views[route]();
+  const navCount = $('#nav-item-count');
+  if(navCount) navCount.textContent = Store.state.items.length;
+  const roleSel = $('#role-select');
+  if(roleSel && document.activeElement !== roleSel) roleSel.value = Store.state.role;
+  const userInp = $('#user-name');
+  if(userInp && document.activeElement !== userInp) userInp.value = Store.state.userName;
+}
+
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-action]');
+  if(!el) return;
+  const act = el.dataset.action, id = el.dataset.id;
+
+  if(act === 'backdrop'){ if(e.target === el) closeModal(); return; }
+  if(act === 'close-modal'){ closeModal(); return; }
+  if(act === 'borrow'){ borrowModal(id); return; }
+  if(act === 'return'){ returnModal(id); return; }
+  if(act === 'detail'){ detailModal(id); return; }
+  if(act === 'tx-detail'){ txDetailModal(id); return; }
+  if(act === 'new-item'){ itemModal(null); return; }
+  if(act === 'edit-item'){ itemModal(id); return; }
+  if(act === 'delete-item'){
+    const item = Store.state.items.find(i=>i.id===id);
+    if(!item) return;
+    openModal(UI.modal('Delete item', `<p>Remove <b>${esc(displayName(item))}</b> from the inventory?<br /><span class="small muted">Loan history will be preserved.</span></p>`, `<button class="btn" data-action="close-modal">Cancel</button><button class="btn danger" data-action="confirm-delete" data-id="${esc(id)}">Delete item</button>`));
+    return;
+  }
+  if(act === 'confirm-delete'){
+    Store.state.items = Store.state.items.filter(i=>i.id!==id);
+    closeModal(); Store.commit('Item deleted','ok'); return;
+  }
+  if(act === 'submit-form'){
+    const form = document.getElementById(el.dataset.formId);
+    if(form) form.requestSubmit();
+    return;
+  }
+  if(act === 'page'){ Store.state.filters.page = Number(el.dataset.page); Store.commit(); return; }
+  if(act === 'layout-sheet'){ Store.state.filters.layoutSheet = el.dataset.sheet; Store.commit(); return; }
+  if(act === 'inv-tab'){ Store.state.invTab = el.dataset.tab; Store.commit(); return; }
+  if(act === 'import-csv'){ $('#csv-input').click(); return; }
+  if(act === 'reset-data'){
+    openModal(UI.modal('Reset data', '<p>Replace all current data with the original workbook inventory?<br /><span class="small muted">Loan records will be cleared. This cannot be undone.</span></p>', `<button class="btn" data-action="close-modal">Cancel</button><button class="btn danger" data-action="confirm-reset">Reset</button>`));
+    return;
+  }
+  if(act === 'confirm-reset'){
+    const role = Store.state.role, userName = Store.state.userName;
+    Store.state = seedState(); Store.state.role = role; Store.state.userName = userName;
+    Store.init(); closeModal(); Store.commit('Restored the workbook inventory','ok'); return;
+  }
+  if(act === 'confirm-import'){
+    const res = $('#modal-root')._pendingImport;
+    if(!res) return;
+    Store.state.items = res.items; Store.state.transactions = res.txs;
+    Store.init(); closeModal();
+    Store.commit(`Imported ${res.items} item(s) and ${res.txs} loan record(s)`,'ok');
+  }
+});
+
+document.addEventListener('submit', (e) => {
+  const form = e.target.closest('[data-form]');
+  if(!form) return;
+  e.preventDefault();
+  if(form.dataset.form === 'borrow') handleBorrow(form);
+  else if(form.dataset.form === 'return') handleReturn(form);
+  else if(form.dataset.form === 'item') handleItem(form);
+});
+
+let filterTimer;
+document.addEventListener('input', (e) => {
+  const t = e.target;
+  if(!['f-q','f-hq','f-lq'].includes(t.id)) return;
+  clearTimeout(filterTimer);
+  const key = t.id === 'f-q' ? 'q' : (t.id === 'f-hq' ? 'hq' : 'layoutQ');
+  const val = t.value;
+  filterTimer = setTimeout(() => {
+    Store.state.filters[key] = val;
+    Store.state.filters.page = 1;
+    Store.save();
+    const pos = t.selectionStart;
+    render();
+    const next = document.getElementById(t.id);
+    if(next){ next.focus(); try{ next.setSelectionRange(pos,pos); }catch(_){} }
+  }, 220);
+});
+document.addEventListener('change', (e) => {
+  const t = e.target;
+  if(t.id === 'f-category'){ Store.state.filters.category = t.value; Store.state.filters.page = 1; Store.commit(); }
+  else if(t.id === 'f-status'){ Store.state.filters.status = t.value; Store.state.filters.page = 1; Store.commit(); }
+  else if(t.id === 'f-hstatus'){ Store.state.filters.hstatus = t.value; Store.commit(); }
+  else if(t.id === 'f-from'){ Store.state.filters.from = t.value; Store.commit(); }
+  else if(t.id === 'f-to'){ Store.state.filters.to = t.value; Store.commit(); }
+  else if(t.id === 'role-select'){ Store.state.role = t.value; Store.commit('Role changed to '+ROLE_LABEL[t.value]); }
+  else if(t.id === 'user-name'){ Store.state.userName = t.value; Store.commit(); }
+});
+const ROLE_LABEL = { borrower:'Borrower', admin:'Admin' };
+document.addEventListener('keydown', (e) => {
+  if(e.key === 'Escape' && $('#modal-root').innerHTML) closeModal();
+});
+$('#csv-input').addEventListener('change', async (e) => {
+  const file = e.target.files && e.target.files[0];
+  if(!file) return;
+  try{
+    const text = await file.text();
+    const res = DataLayer.importCSV(text);
+    if(!res.items && !res.txs) return toast('No readable data found in this file','bad');
+    openModal(UI.modal('Import CSV data', `<p>Found <b>${res.items}</b> inventory item(s) and <b>${res.txs}</b> loan record(s).</p><p class="small muted">Replace the current data with the imported data?</p>`, `<button class="btn" data-action="close-modal">Cancel</button><button class="btn primary" data-action="confirm-import">Replace data</button>`));
+    $('#modal-root')._pendingImport = res;
+  }catch(err){ toast('Could not read file: '+err.message,'bad'); }
+  e.target.value = '';
+});
+
+window.addEventListener('hashchange', render);
+render();
+</script>
+</body>
+</html>
